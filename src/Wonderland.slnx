@@ -1,0 +1,9 @@
+<Solution>
+  <Project Path="Wonderland.Application/Wonderland.Application.csproj" />
+  <Project Path="Wonderland.Domain/Wonderland.Domain.csproj" />
+  <Project Path="Wonderland.Infrastructure/Wonderland.Infrastructure.csproj" />
+  <Project Path="Wonderland.UI/Wonderland.UI.csproj" />
+  <Project Path="Wonderland.ViewModels/Wonderland.ViewModels.csproj" />
+  <Project Path="Wonderland.WpfApp/Wonderland.WpfApp.csproj" />
+  <Project Path="Wonderland.WpfServices/Wonderland.WpfServices.csproj" />
+</Solution>
