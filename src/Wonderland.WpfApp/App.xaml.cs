@@ -29,7 +29,10 @@ public partial class App : System.Windows.Application
         if (!createdNew)
         {
             System.Windows.MessageBox.Show("Wonderland is already running.", "Wonderland", MessageBoxButton.OK, MessageBoxImage.Information);
-            Environment.Exit(0);
+            // Shutdown을 호출하여 정상 종료 (Environment.Exit는 리소스 정리 안됨)
+            // Call Shutdown for proper exit (Environment.Exit skips cleanup)
+            Shutdown();
+            _host = null!;
             return;
         }
 
@@ -70,6 +73,14 @@ public partial class App : System.Windows.Application
 
     protected override async void OnStartup(StartupEventArgs e)
     {
+        // Mutex가 이미 존재하는 경우 (중복 실행) 건너뛰기
+        // Skip if mutex already exists (duplicate execution)
+        if (_host is null)
+        {
+            base.OnStartup(e);
+            return;
+        }
+
         await _host.StartAsync();
 
         var mainWindow = _host.Services.GetRequiredService<MainWindow>();
@@ -80,8 +91,16 @@ public partial class App : System.Windows.Application
 
     protected override async void OnExit(ExitEventArgs e)
     {
-        await _host.StopAsync();
-        _host.Dispose();
+        if (_host is not null)
+        {
+            // TrayIcon을 먼저 명시적으로 Dispose (잔상 방지)
+            // Explicitly dispose TrayIcon first (prevent ghost icon)
+            var trayIcon = _host.Services.GetService<TrayIconService>();
+            trayIcon?.Dispose();
+
+            await _host.StopAsync();
+            _host.Dispose();
+        }
 
         // Mutex 해제
         // Release mutex

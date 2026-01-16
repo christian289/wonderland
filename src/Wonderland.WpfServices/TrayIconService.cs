@@ -114,8 +114,17 @@ public sealed class TrayIconService : IDisposable
         using var whiteBrush = new SolidBrush(Color.White);
         g.FillEllipse(whiteBrush, 5, 5, 6, 6);
 
-        return Icon.FromHandle(bitmap.GetHicon());
+        // Icon.FromHandle로 생성된 아이콘은 Clone()으로 복사하여 핸들 해제
+        // Clone the icon created from handle to allow handle cleanup
+        var hIcon = bitmap.GetHicon();
+        using var tempIcon = Icon.FromHandle(hIcon);
+        var clonedIcon = (Icon)tempIcon.Clone();
+        DestroyIcon(hIcon);
+        return clonedIcon;
     }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Auto)]
+    private static extern bool DestroyIcon(IntPtr handle);
 
     /// <summary>
     /// 풍선 알림 표시
@@ -128,7 +137,17 @@ public sealed class TrayIconService : IDisposable
 
     public void Dispose()
     {
-        _notifyIcon?.Dispose();
+        if (_notifyIcon is not null)
+        {
+            // 아이콘을 숨긴 후 Dispose (트레이에 잔상 방지)
+            // Hide the icon before disposing (prevent tray ghost icon)
+            _notifyIcon.Visible = false;
+            _notifyIcon.Icon?.Dispose();
+            _notifyIcon.Dispose();
+            _notifyIcon = null;
+        }
+
         _contextMenu?.Dispose();
+        _contextMenu = null;
     }
 }
