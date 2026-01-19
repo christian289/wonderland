@@ -7,7 +7,6 @@ using Wonderland.Application.Settings;
 
 /// <summary>
 /// JSON 파일 기반 설정 서비스
-/// JSON file-based settings service
 /// </summary>
 public sealed class JsonSettingsService : ISettingsService
 {
@@ -27,7 +26,6 @@ public sealed class JsonSettingsService : ISettingsService
 
     /// <summary>
     /// 설정 저장
-    /// Save settings
     /// </summary>
     public async Task SaveSettingsAsync(AppSettings settings)
     {
@@ -37,7 +35,6 @@ public sealed class JsonSettingsService : ISettingsService
 
     /// <summary>
     /// 설정 로드
-    /// Load settings
     /// </summary>
     public async Task<AppSettings> LoadSettingsAsync()
     {

@@ -5,7 +5,6 @@ namespace Wonderland.WpfServices;
 
 /// <summary>
 /// 전역 마우스 훅 (Viewer 모드에서 마우스 위치 추적용)
-/// Global mouse hook (for tracking mouse position in Viewer mode)
 /// </summary>
 public sealed class GlobalMouseHook : IDisposable
 {
@@ -50,7 +49,6 @@ public sealed class GlobalMouseHook : IDisposable
 
     /// <summary>
     /// 마우스 이동 이벤트
-    /// Mouse move event
     /// </summary>
     public event EventHandler<System.Windows.Point>? MouseMoved;
 
@@ -61,7 +59,6 @@ public sealed class GlobalMouseHook : IDisposable
 
     /// <summary>
     /// 훅 시작
-    /// Start hook
     /// </summary>
     public void Start()
     {
@@ -73,7 +70,6 @@ public sealed class GlobalMouseHook : IDisposable
 
     /// <summary>
     /// 훅 중지
-    /// Stop hook
     /// </summary>
     public void Stop()
     {

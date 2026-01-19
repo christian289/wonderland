@@ -5,7 +5,6 @@ namespace Wonderland.WpfServices;
 
 /// <summary>
 /// 전역 키보드 훅 (포커스 없이도 키 입력 감지)
-/// Global keyboard hook (detect key input without focus)
 /// </summary>
 public sealed class GlobalKeyboardHook : IDisposable
 {
@@ -43,7 +42,6 @@ public sealed class GlobalKeyboardHook : IDisposable
 
     /// <summary>
     /// 키 입력 이벤트
-    /// Key pressed event
     /// </summary>
     public event EventHandler<Key>? KeyPressed;
 
@@ -54,7 +52,6 @@ public sealed class GlobalKeyboardHook : IDisposable
 
     /// <summary>
     /// 훅 시작
-    /// Start hook
     /// </summary>
     public void Start()
     {
@@ -66,7 +63,6 @@ public sealed class GlobalKeyboardHook : IDisposable
 
     /// <summary>
     /// 훅 중지
-    /// Stop hook
     /// </summary>
     public void Stop()
     {

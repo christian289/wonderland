@@ -7,7 +7,6 @@ namespace Wonderland.Application.Services;
 
 /// <summary>
 /// 씬 관리 서비스
-/// Scene management service
 /// </summary>
 public sealed class SceneService(ISceneRepository repository)
 {
@@ -15,13 +14,11 @@ public sealed class SceneService(ISceneRepository repository)
 
     /// <summary>
     /// 현재 씬
-    /// Current scene
     /// </summary>
     public Scene CurrentScene => _currentScene;
 
     /// <summary>
     /// 새 씬 생성
-    /// Create new scene
     /// </summary>
     public Scene CreateNew(string name, int width, int height)
     {
@@ -36,13 +33,12 @@ public sealed class SceneService(ISceneRepository repository)
 
     /// <summary>
     /// 레이어 추가
-    /// Add layer
     /// </summary>
     public Layer AddLayer(string name, string imagePath, int zIndex)
     {
         if (_currentScene.Layers.Count >= 11)
         {
-            throw new InvalidOperationException("최대 레이어 수(11)를 초과할 수 없습니다. / Cannot exceed maximum layer count (11).");
+            throw new InvalidOperationException("최대 레이어 수(11)를 초과할 수 없습니다.");
         }
 
         var layer = new Layer
@@ -62,7 +58,6 @@ public sealed class SceneService(ISceneRepository repository)
 
     /// <summary>
     /// 레이어 제거
-    /// Remove layer
     /// </summary>
     public bool RemoveLayer(Guid layerId)
     {
@@ -74,7 +69,6 @@ public sealed class SceneService(ISceneRepository repository)
 
     /// <summary>
     /// 파티클 이미터 추가
-    /// Add particle emitter
     /// </summary>
     public ParticleEmitter AddParticleEmitter(ParticleType type)
     {
@@ -90,13 +84,11 @@ public sealed class SceneService(ISceneRepository repository)
 
     /// <summary>
     /// 씬 저장
-    /// Save scene
     /// </summary>
     public Task SaveAsync(string filePath) => repository.SaveAsync(_currentScene, filePath);
 
     /// <summary>
     /// 씬 로드
-    /// Load scene
     /// </summary>
     public async Task<bool> LoadAsync(string filePath)
     {
@@ -109,7 +101,6 @@ public sealed class SceneService(ISceneRepository repository)
 
     /// <summary>
     /// 파티클 타입별 기본 설정 반환
-    /// Get default particle settings by type
     /// </summary>
     private static ParticleSettings GetDefaultParticleSettings(ParticleType type) => type switch
     {

@@ -7,7 +7,6 @@ namespace Wonderland.Infrastructure.Persistence;
 
 /// <summary>
 /// JSON 파일 기반 씬 저장소
-/// JSON file-based scene repository
 /// </summary>
 public sealed class JsonSceneRepository : ISceneRepository
 {
