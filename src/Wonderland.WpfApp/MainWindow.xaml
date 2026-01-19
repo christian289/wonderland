@@ -21,54 +21,38 @@
     <Grid>
         <Grid.ColumnDefinitions>
             <!-- 콘텐츠 영역 -->
-            <!-- Content area -->
             <ColumnDefinition Width="*" />
             <!-- 에디터 패널 (우측 확장) -->
-            <!-- Editor panel (right side expansion) -->
             <ColumnDefinition x:Name="EditorColumn" Width="0" />
         </Grid.ColumnDefinitions>
 
         <!-- 콘텐츠 영역 (Parallax + Particle + Selection) -->
-        <!-- Content area (Parallax + Particle + Selection) -->
         <Grid x:Name="ContentGrid" Grid.Column="0">
             <!-- Parallax 레이어 캔버스 -->
-            <!-- Parallax layer canvas -->
             <controls:ParallaxCanvas x:Name="ParallaxCanvas" />
 
             <!-- 파티클 캔버스 -->
-            <!-- Particle canvas -->
             <controls:ParticleCanvas x:Name="ParticleCanvas" IsHitTestVisible="False" />
 
             <!-- 선택 오버레이 캔버스 (Edit 모드에서 이미지 조작용) -->
-            <!-- Selection overlay canvas (for image manipulation in Edit mode) -->
-            <!-- Canvas는 부모 크기를 자동으로 채우지 않으므로 코드에서 크기 설정 필요 -->
-            <!-- Canvas doesn't auto-fill parent size, so size must be set in code -->
             <Canvas x:Name="SelectionOverlay"
                     Visibility="Collapsed"
                     Background="Transparent"
                     ClipToBounds="False" />
 
             <!-- 드래그 영역 (Edit 모드에서만 표시) -->
-            <!-- Drag area (only visible in Edit mode) -->
             <Border x:Name="DragArea"
-                    Background="#60000000"
-                    Height="24"
-                    VerticalAlignment="Top"
-                    Cursor="SizeAll"
+                    Style="{StaticResource DragAreaStyle}"
                     Visibility="Collapsed">
                 <TextBlock Text="☰ Drag to move"
-                           Foreground="#A0FFFFFF"
-                           FontSize="10"
-                           HorizontalAlignment="Center"
-                           VerticalAlignment="Center"/>
+                           Style="{StaticResource DragAreaTextStyle}"/>
             </Border>
         </Grid>
 
         <!-- 에디터 패널 (우측) -->
-        <!-- Editor panel (right side) -->
         <Border x:Name="EditorPanel"
                 Grid.Column="1"
-                Background="#F0202020"
+                Style="{StaticResource EditorPanelStyle}"
                 Visibility="Collapsed">
             <Grid>
                 <Grid.RowDefinitions>
@@ -77,117 +61,74 @@
                 </Grid.RowDefinitions>
 
                 <!-- 헤더 -->
-                <!-- Header -->
-                <Border Grid.Row="0"
-                        Background="#FF303030"
-                        Padding="10,8">
-                    <TextBlock Text="Editor"
-                               FontSize="14"
-                               FontWeight="Bold"
-                               Foreground="White"/>
+                <Border Grid.Row="0" Style="{StaticResource EditorHeaderStyle}">
+                    <TextBlock Text="Editor" Style="{StaticResource EditorHeaderTextStyle}"/>
                 </Border>
 
                 <!-- 스크롤 가능한 콘텐츠 -->
-                <!-- Scrollable content -->
-                <ScrollViewer Grid.Row="1"
-                              VerticalScrollBarVisibility="Auto"
-                              HorizontalScrollBarVisibility="Disabled">
-                    <StackPanel Margin="10">
+                <ScrollViewer Grid.Row="1" Style="{StaticResource EditorScrollViewerStyle}">
+                    <StackPanel Style="{StaticResource EditorContentStyle}">
+
                         <!-- 배경 설정 (Z-Index 0, 단일) -->
-                        <!-- Background settings (Z-Index 0, single) -->
                         <TextBlock Text="Background (Z:0)"
-                                   FontWeight="SemiBold"
-                                   Foreground="#FFD700"
-                                   FontSize="12"
-                                   Margin="0,0,0,5"/>
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,5">
+                                   Style="{StaticResource EditorBackgroundTitleStyle}"/>
+                        <StackPanel Style="{StaticResource EditorButtonGroupStyle}">
                             <Button x:Name="SetBackgroundButton"
                                     Content="Set"
-                                    Padding="8,4"
+                                    Style="{StaticResource EditorButtonStyle}"
                                     Width="60"
                                     Margin="0,0,5,0"/>
                             <Button x:Name="RemoveBackgroundButton"
                                     Content="Remove"
-                                    Padding="8,4"
+                                    Style="{StaticResource EditorButtonStyle}"
                                     Width="60"/>
                         </StackPanel>
                         <TextBlock x:Name="BackgroundPathText"
                                    Text="(None)"
-                                   Foreground="#80FFFFFF"
-                                   FontSize="10"
-                                   TextTrimming="CharacterEllipsis"
-                                   Margin="0,0,0,10"/>
+                                   Style="{StaticResource EditorPathTextStyle}"/>
 
-                        <Separator Margin="0,5" Background="#40FFFFFF"/>
+                        <Separator Style="{StaticResource EditorSeparatorStyle}"/>
 
                         <!-- 전경 레이어 (Z-Index 1~10) -->
-                        <!-- Foreground layers (Z-Index 1~10) -->
                         <TextBlock Text="Layers (Drag to reorder)"
-                                   FontWeight="SemiBold"
-                                   Foreground="#00BFFF"
-                                   FontSize="12"
-                                   Margin="0,10,0,5"/>
+                                   Style="{StaticResource EditorLayerTitleStyle}"/>
                         <Button x:Name="AddLayerButton"
                                 Content="+ Add Layer"
-                                Padding="8,4"
-                                Margin="0,0,0,5"/>
+                                Style="{StaticResource EditorFullWidthButtonStyle}"/>
                         <ListBox x:Name="LayerListBox"
-                                 MaxHeight="150"
-                                 Background="#20FFFFFF"
-                                 BorderThickness="0"
-                                 Foreground="White"
-                                 AllowDrop="True"
-                                 Margin="0,0,0,10">
-                            <ListBox.ItemContainerStyle>
-                                <Style TargetType="ListBoxItem">
-                                    <Setter Property="Padding" Value="8,4"/>
-                                    <Setter Property="Cursor" Value="Hand"/>
-                                    <Setter Property="AllowDrop" Value="True"/>
-                                </Style>
-                            </ListBox.ItemContainerStyle>
-                        </ListBox>
+                                 Style="{StaticResource EditorListBoxStyle}"
+                                 ItemContainerStyle="{StaticResource EditorListBoxItemStyle}"/>
 
-                        <Separator Margin="0,5" Background="#40FFFFFF"/>
+                        <Separator Style="{StaticResource EditorSeparatorStyle}"/>
 
                         <!-- 파티클 프리셋 (단일) -->
-                        <!-- Particle preset (single) -->
                         <TextBlock Text="Particle Preset"
-                                   FontWeight="SemiBold"
-                                   Foreground="#FF69B4"
-                                   FontSize="12"
-                                   Margin="0,10,0,5"/>
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,5">
+                                   Style="{StaticResource EditorParticleTitleStyle}"/>
+                        <StackPanel Style="{StaticResource EditorRadioGroupStyle}">
                             <RadioButton x:Name="PresetNoneRadio"
                                          Content="None"
-                                         Foreground="White"
-                                         Margin="0,0,10,0"
+                                         Style="{StaticResource EditorRadioButtonStyle}"
                                          GroupName="Preset"
                                          IsChecked="True"/>
                             <RadioButton x:Name="PresetSnowRadio"
                                          Content="Snow"
-                                         Foreground="White"
-                                         Margin="0,0,10,0"
+                                         Style="{StaticResource EditorRadioButtonStyle}"
                                          GroupName="Preset"/>
                             <RadioButton x:Name="PresetRainRadio"
                                          Content="Rain"
-                                         Foreground="White"
+                                         Style="{StaticResource EditorRadioButtonStyle}"
+                                         Margin="0"
                                          GroupName="Preset"/>
                         </StackPanel>
                         <TextBlock x:Name="PresetZIndexText"
                                    Text="Z-Index: 11"
-                                   Foreground="#80FFFFFF"
-                                   FontSize="10"
-                                   Margin="0,5,0,10"/>
+                                   Style="{StaticResource EditorZIndexTextStyle}"/>
 
-                        <Separator Margin="0,5" Background="#40FFFFFF"/>
+                        <Separator Style="{StaticResource EditorSeparatorStyle}"/>
 
                         <!-- 모드 정보 -->
-                        <!-- Mode info -->
-                        <TextBlock Text="F12: Toggle Edit mode&#x0a;ESC: Exit Edit mode&#x0a;Click image to select&#x0a;Drag to move/resize"
-                                   Foreground="#60FFFFFF"
-                                   FontSize="10"
-                                   TextWrapping="Wrap"
-                                   Margin="0,10,0,0"/>
+                        <TextBlock Text="F12: Toggle Edit mode&#x0a;ESC: Exit Edit mode&#x0a;Ctrl+Z: Undo&#x0a;Delete: Remove layer&#x0a;Click image to select&#x0a;Drag to move/resize"
+                                   Style="{StaticResource EditorInfoTextStyle}"/>
                     </StackPanel>
                 </ScrollViewer>
             </Grid>

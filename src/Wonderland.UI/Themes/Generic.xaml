@@ -1,6 +1,10 @@
 <ResourceDictionary
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <!-- ParallaxCanvas와 ParticleCanvas는 FrameworkElement 기반으로 스타일 불필요 -->
-    <!-- ParallaxCanvas and ParticleCanvas are FrameworkElement-based, no styles needed -->
+
+    <!-- 에디터 스타일 병합 -->
+    <ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary Source="/Wonderland.UI;component/Themes/EditorStyles.xaml"/>
+    </ResourceDictionary.MergedDictionaries>
+
 </ResourceDictionary>

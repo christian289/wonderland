@@ -5,7 +5,10 @@
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
-                <ResourceDictionary Source="Resources/Mappings.xaml" />
+                <!-- Wonderland.UI 스타일 -->
+                <ResourceDictionary Source="/Wonderland.UI;component/Themes/Generic.xaml"/>
+                <!-- ViewModel-View 매핑 -->
+                <ResourceDictionary Source="Resources/Mappings.xaml"/>
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Application.Resources>
