@@ -8,20 +8,19 @@ using DragEventArgs = System.Windows.DragEventArgs;
 using DataObject = System.Windows.DataObject;
 using DragDropEffects = System.Windows.DragDropEffects;
 using Point = System.Windows.Point;
-using Cursor = System.Windows.Input.Cursor;
 using Cursors = System.Windows.Input.Cursors;
 using Wonderland.Application.Interfaces;
 using Wonderland.Application.Settings;
 using Wonderland.Domain.Enums;
 using OpenFileDialog = Microsoft.Win32.OpenFileDialog;
 using Wonderland.ViewModels;
+using Wonderland.WpfApp.Services.Editing;
 using Wonderland.WpfServices;
 
 namespace Wonderland.WpfApp;
 
 /// <summary>
 /// MainWindow 코드비하인드
-/// MainWindow code-behind
 /// </summary>
 public partial class MainWindow : Window
 {
@@ -32,6 +31,21 @@ public partial class MainWindow : Window
     private readonly GlobalKeyboardHook _globalKeyboardHook;
     private readonly TrayIconService _trayIconService;
     private readonly ISettingsService _settingsService;
+
+    // 편집 서비스
+    private UndoService? _undoService;
+    private LayerManipulationService? _layerManipulationService;
+    private SelectionIndicatorService? _selectionIndicatorService;
+
+    // 에디터 패널 너비
+    private const double EditorPanelWidth = 200;
+
+    // 원래 창 너비 (Edit 모드 전환 시 복원용)
+    private double _originalWindowWidth;
+
+    // 레이어 드래그 앤 드롭용 필드
+    private Point _layerDragStartPoint;
+    private bool _isLayerDragging;
 
     public MainWindow(
         MainViewModel viewModel,
@@ -57,105 +71,131 @@ public partial class MainWindow : Window
         SetupEventHandlers();
     }
 
+    #region 이벤트 핸들러 설정
+
     /// <summary>
     /// 이벤트 핸들러 설정
-    /// Setup event handlers
     /// </summary>
     private void SetupEventHandlers()
     {
         // 창 이벤트
-        // Window events
         Loaded += OnWindowLoaded;
         Closed += OnWindowClosed;
         SizeChanged += OnWindowSizeChanged;
         KeyDown += OnKeyDown;
 
         // 모드 변경
-        // Mode change
         _windowModeService.ModeChanged += OnModeChanged;
 
         // 전역 훅
-        // Global hooks
         _globalMouseHook.MouseMoved += OnGlobalMouseMoved;
         _globalKeyboardHook.KeyPressed += OnGlobalKeyPressed;
 
         // 트레이 아이콘 이벤트
-        // Tray icon events
         _trayIconService.ExitRequested += OnExitRequested;
         _trayIconService.ModeToggleRequested += OnModeToggleRequested;
         _trayIconService.EditModeRequested += OnEditModeRequested;
 
         // 버튼 클릭
-        // Button clicks
         SetBackgroundButton.Click += OnSetBackgroundClick;
         RemoveBackgroundButton.Click += OnRemoveBackgroundClick;
         AddLayerButton.Click += OnAddLayerClick;
 
         // 프리셋 라디오 버튼
-        // Preset radio buttons
         PresetNoneRadio.Checked += (_, _) => OnPresetChanged(ParticleType.None);
         PresetSnowRadio.Checked += (_, _) => OnPresetChanged(ParticleType.Snow);
         PresetRainRadio.Checked += (_, _) => OnPresetChanged(ParticleType.Rain);
 
         // 드래그 영역 이벤트
-        // Drag area events
         DragArea.MouseLeftButtonDown += OnDragAreaMouseLeftButtonDown;
 
         // 레이어 리스트 드래그 앤 드롭
-        // Layer list drag and drop
         LayerListBox.PreviewMouseLeftButtonDown += OnLayerListPreviewMouseDown;
         LayerListBox.PreviewMouseMove += OnLayerListPreviewMouseMove;
         LayerListBox.Drop += OnLayerListDrop;
 
         // 선택 오버레이 이벤트 (이미지 조작)
-        // Selection overlay events (image manipulation)
         SelectionOverlay.MouseLeftButtonDown += OnSelectionOverlayMouseDown;
         SelectionOverlay.MouseLeftButtonUp += OnSelectionOverlayMouseUp;
         SelectionOverlay.MouseMove += OnSelectionOverlayMouseMove;
     }
 
+    #endregion
+
+    #region 창 생명주기
+
     /// <summary>
     /// 창 로드 완료
-    /// Window loaded
     /// </summary>
     private async void OnWindowLoaded(object sender, RoutedEventArgs e)
     {
+        // 편집 서비스 초기화
+        _undoService = new UndoService();
+        _layerManipulationService = new LayerManipulationService(ParallaxCanvas, _undoService);
+        _selectionIndicatorService = new SelectionIndicatorService(SelectionOverlay);
+
         _windowModeService.Initialize(this);
         _globalMouseHook.Start();
         _globalKeyboardHook.Start();
         _trayIconService.Initialize();
 
         // 설정 로드 (NewScene 호출하지 않음 - 설정이 초기화됨)
-        // Load settings (don't call NewScene - it clears settings)
         await LoadSettingsAsync();
 
         _mouseTrackingService.Initialize(ActualWidth, ActualHeight);
 
         // 파티클 업데이트
-        // Update particles
         UpdateParticleCanvas();
         UpdateUI();
 
         // 시작 알림
-        // Startup notification
         _trayIconService.ShowNotification("Wonderland", "Press F12 to toggle Edit mode");
     }
 
     /// <summary>
+    /// 창 닫힘
+    /// </summary>
+    private async void OnWindowClosed(object? sender, EventArgs e)
+    {
+        await SaveSettingsAsync();
+
+        _globalMouseHook.Stop();
+        _globalMouseHook.Dispose();
+        _globalKeyboardHook.Stop();
+        _globalKeyboardHook.Dispose();
+        _trayIconService.Dispose();
+    }
+
+    /// <summary>
+    /// 창 크기 변경
+    /// </summary>
+    private void OnWindowSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        _mouseTrackingService.UpdateWindowSize(e.NewSize.Width, e.NewSize.Height);
+        ScaleBackgroundToWindow();
+
+        if (_windowModeService.CurrentMode == AppMode.Edit)
+        {
+            Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, UpdateSelectionOverlaySize);
+        }
+    }
+
+    #endregion
+
+    #region 설정 로드/저장
+
+    /// <summary>
     /// 설정 로드
-    /// Load settings
     /// </summary>
     private async Task LoadSettingsAsync()
     {
         var settings = await _settingsService.LoadSettingsAsync();
 
         // 창 크기 적용
-        // Apply window size
         Width = settings.Window.Width;
         Height = settings.Window.Height;
 
         // 창 위치 적용 (저장된 위치가 있는 경우)
-        // Apply window position (if saved position exists)
         if (!double.IsNaN(settings.Window.Left) && !double.IsNaN(settings.Window.Top))
         {
             Left = settings.Window.Left;
@@ -164,7 +204,6 @@ public partial class MainWindow : Window
         }
 
         // 배경 로드
-        // Load background
         if (!string.IsNullOrEmpty(settings.BackgroundImagePath) && File.Exists(settings.BackgroundImagePath))
         {
             _viewModel.SetBackgroundCommand.Execute(settings.BackgroundImagePath);
@@ -175,48 +214,42 @@ public partial class MainWindow : Window
         }
 
         // 전경 레이어 로드
-        // Load foreground layers
         foreach (var layerSetting in settings.Layers.OrderBy(l => l.ZIndex))
         {
-            if (File.Exists(layerSetting.ImagePath))
+            if (!File.Exists(layerSetting.ImagePath)) continue;
+
+            _viewModel.AddLayerCommand.Execute(layerSetting.ImagePath);
+
+            var layer = _viewModel.Layers.LastOrDefault();
+            if (layer is null) continue;
+
+            layer.ZIndex = layerSetting.ZIndex;
+            layer.DepthFactor = layerSetting.DepthFactor;
+            layer.MaxOffsetX = layerSetting.MaxOffsetX;
+            layer.MaxOffsetY = layerSetting.MaxOffsetY;
+
+            ParallaxCanvas.AddLayer(layer.GetEntity());
+
+            // 레이어 변환 정보 적용 (저장된 위치가 있는 경우)
+            if (layerSetting.X.HasValue && layerSetting.Y.HasValue &&
+                layerSetting.Width.HasValue && layerSetting.Height.HasValue)
             {
-                _viewModel.AddLayerCommand.Execute(layerSetting.ImagePath);
+                ParallaxCanvas.UpdateLayerTransform(
+                    layer.Id,
+                    layerSetting.X.Value,
+                    layerSetting.Y.Value,
+                    layerSetting.Width.Value,
+                    layerSetting.Height.Value);
+            }
 
-                var layer = _viewModel.Layers.LastOrDefault();
-                if (layer is not null)
-                {
-                    layer.ZIndex = layerSetting.ZIndex;
-                    layer.DepthFactor = layerSetting.DepthFactor;
-                    layer.MaxOffsetX = layerSetting.MaxOffsetX;
-                    layer.MaxOffsetY = layerSetting.MaxOffsetY;
-
-                    ParallaxCanvas.AddLayer(layer.GetEntity());
-
-                    // 레이어 변환 정보 적용 (저장된 위치가 있는 경우)
-                    // Apply layer transform data (if saved position exists)
-                    if (layerSetting.X.HasValue && layerSetting.Y.HasValue &&
-                        layerSetting.Width.HasValue && layerSetting.Height.HasValue)
-                    {
-                        ParallaxCanvas.UpdateLayerTransform(
-                            layer.Id,
-                            layerSetting.X.Value,
-                            layerSetting.Y.Value,
-                            layerSetting.Width.Value,
-                            layerSetting.Height.Value);
-                    }
-
-                    // 회전 정보 적용
-                    // Apply rotation data
-                    if (Math.Abs(layerSetting.Rotation) > 0.01)
-                    {
-                        ParallaxCanvas.UpdateLayerRotation(layer.Id, layerSetting.Rotation);
-                    }
-                }
+            // 회전 정보 적용
+            if (Math.Abs(layerSetting.Rotation) > 0.01)
+            {
+                ParallaxCanvas.UpdateLayerRotation(layer.Id, layerSetting.Rotation);
             }
         }
 
         // 파티클 프리셋 로드
-        // Load particle preset
         if (settings.ParticlePreset is not null)
         {
             var presetType = Enum.TryParse<ParticleType>(settings.ParticlePreset.Type, out var type)
@@ -230,33 +263,11 @@ public partial class MainWindow : Window
         }
 
         // 배경 스케일 적용 (Dispatcher를 통해 레이아웃 업데이트 후 실행)
-        // Apply background scale (run after layout update via Dispatcher)
-        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, () =>
-        {
-            ScaleBackgroundToWindow();
-        });
-    }
-
-    /// <summary>
-    /// 창 닫힘
-    /// Window closed
-    /// </summary>
-    private async void OnWindowClosed(object? sender, EventArgs e)
-    {
-        // 설정 저장
-        // Save settings
-        await SaveSettingsAsync();
-
-        _globalMouseHook.Stop();
-        _globalMouseHook.Dispose();
-        _globalKeyboardHook.Stop();
-        _globalKeyboardHook.Dispose();
-        _trayIconService.Dispose();
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, ScaleBackgroundToWindow);
     }
 
     /// <summary>
     /// 설정 저장
-    /// Save settings
     /// </summary>
     private async Task SaveSettingsAsync()
     {
@@ -272,8 +283,6 @@ public partial class MainWindow : Window
             BackgroundImagePath = _viewModel.BackgroundImagePath,
             Layers = _viewModel.Layers.Select(l =>
             {
-                // ParallaxCanvas에서 레이어 변환 정보 가져오기
-                // Get layer transform data from ParallaxCanvas
                 var bounds = ParallaxCanvas.GetLayerBounds(l.Id);
                 var rotation = ParallaxCanvas.GetLayerRotation(l.Id);
 
@@ -304,55 +313,12 @@ public partial class MainWindow : Window
         await _settingsService.SaveSettingsAsync(settings);
     }
 
-    /// <summary>
-    /// 창 크기 변경
-    /// Window size changed
-    /// </summary>
-    private void OnWindowSizeChanged(object sender, SizeChangedEventArgs e)
-    {
-        _mouseTrackingService.UpdateWindowSize(e.NewSize.Width, e.NewSize.Height);
+    #endregion
 
-        // 배경 이미지 스케일 조정 (Edit 모드가 아닐 때만 콘텐츠 영역 크기 사용)
-        // Scale background image (use content area size when not in Edit mode)
-        ScaleBackgroundToWindow();
-
-        // Edit 모드에서 SelectionOverlay 크기 업데이트
-        // Update SelectionOverlay size in Edit mode
-        if (_windowModeService.CurrentMode == AppMode.Edit)
-        {
-            Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, () =>
-            {
-                UpdateSelectionOverlaySize();
-            });
-        }
-    }
-
-    /// <summary>
-    /// 배경 이미지를 콘텐츠 영역에 맞게 스케일
-    /// Scale background image to fit content area
-    /// </summary>
-    private void ScaleBackgroundToWindow()
-    {
-        if (_viewModel.BackgroundLayer is null)
-        {
-            return;
-        }
-
-        // Edit 모드일 때는 에디터 패널 너비를 제외한 콘텐츠 영역 사용
-        // When in Edit mode, use content area excluding editor panel width
-        var contentWidth = _windowModeService.CurrentMode == AppMode.Edit
-            ? ActualWidth - EditorPanelWidth
-            : ActualWidth;
-
-        ParallaxCanvas.ScaleBackgroundToFit(
-            _viewModel.BackgroundLayer.Id,
-            contentWidth,
-            ActualHeight);
-    }
+    #region 키보드 입력
 
     /// <summary>
     /// 키보드 입력 처리
-    /// Handle keyboard input
     /// </summary>
     private void OnKeyDown(object sender, KeyEventArgs e)
     {
@@ -366,15 +332,12 @@ public partial class MainWindow : Window
             _windowModeService.SetMode(AppMode.Viewer);
             e.Handled = true;
         }
-        // Ctrl+Z: Undo
         else if (e.Key == Key.Z && Keyboard.Modifiers == ModifierKeys.Control &&
                  _windowModeService.CurrentMode == AppMode.Edit)
         {
             PerformUndo();
             e.Handled = true;
         }
-        // Delete: 선택된 레이어 삭제
-        // Delete: Delete selected layer
         else if (e.Key == Key.Delete && _windowModeService.CurrentMode == AppMode.Edit)
         {
             DeleteSelectedLayer();
@@ -383,8 +346,114 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
+    /// 전역 키보드 입력 처리
+    /// </summary>
+    private void OnGlobalKeyPressed(object? sender, Key key)
+    {
+        if (key == Key.F12)
+        {
+            Dispatcher.Invoke(() => _windowModeService.ToggleMode());
+        }
+    }
+
+    #endregion
+
+    #region 모드 변경
+
+    /// <summary>
+    /// 모드 변경 처리
+    /// </summary>
+    private void OnModeChanged(object? sender, AppMode mode)
+    {
+        Dispatcher.Invoke(() =>
+        {
+            var isEditMode = mode == AppMode.Edit;
+
+            if (isEditMode)
+            {
+                // Edit 모드 진입: 창 확장
+                _originalWindowWidth = Width;
+                Width = _originalWindowWidth + EditorPanelWidth;
+                EditorColumn.Width = new GridLength(EditorPanelWidth);
+                EditorPanel.Visibility = Visibility.Visible;
+                DragArea.Visibility = Visibility.Visible;
+
+                UpdateUI();
+
+                Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, UpdateSelectionOverlaySize);
+            }
+            else
+            {
+                // Edit 모드 종료: 창 복원
+                EditorColumn.Width = new GridLength(0);
+                EditorPanel.Visibility = Visibility.Collapsed;
+                DragArea.Visibility = Visibility.Collapsed;
+                Width = _originalWindowWidth > 0 ? _originalWindowWidth : Width - EditorPanelWidth;
+                ClearLayerSelection();
+
+                // 설정 자동 저장
+                _ = SaveSettingsAsync();
+            }
+
+            SelectionOverlay.Visibility = isEditMode ? Visibility.Visible : Visibility.Collapsed;
+
+            _viewModel.CurrentMode = mode;
+            _trayIconService.UpdateMode(mode);
+        });
+    }
+
+    /// <summary>
+    /// SelectionOverlay 크기 업데이트
+    /// </summary>
+    private void UpdateSelectionOverlaySize()
+    {
+        SelectionOverlay.Width = ContentGrid.ActualWidth;
+        SelectionOverlay.Height = ContentGrid.ActualHeight;
+    }
+
+    #endregion
+
+    #region 트레이 아이콘 이벤트
+
+    private void OnExitRequested(object? sender, EventArgs e)
+    {
+        Dispatcher.Invoke(() => System.Windows.Application.Current.Shutdown());
+    }
+
+    private void OnModeToggleRequested(object? sender, EventArgs e)
+    {
+        Dispatcher.Invoke(() => _windowModeService.ToggleMode());
+    }
+
+    private void OnEditModeRequested(object? sender, EventArgs e)
+    {
+        Dispatcher.Invoke(() => _windowModeService.SetMode(AppMode.Edit));
+    }
+
+    #endregion
+
+    #region 마우스 이벤트
+
+    /// <summary>
+    /// 전역 마우스 이동 처리
+    /// </summary>
+    private void OnGlobalMouseMoved(object? sender, Point position)
+    {
+        Dispatcher.Invoke(() =>
+        {
+            // Edit 모드에서는 Parallax 효과 비활성화
+            if (_windowModeService.CurrentMode == AppMode.Edit) return;
+
+            var (normalizedX, normalizedY) = _mouseTrackingService.GetNormalizedPosition(position);
+            _viewModel.UpdateMousePosition(normalizedX, normalizedY);
+
+            var offsets = _viewModel.GetAllLayers().Select(l => (l.Id, l.CurrentOffsetX, l.CurrentOffsetY)).ToList();
+            ParallaxCanvas.UpdateAllOffsets(offsets);
+        });
+    }
+
+    /// <summary>
     /// 드래그 영역에서 마우스 왼쪽 버튼 클릭 처리 (창 드래그)
-    /// Handle mouse left button down on drag area (window drag)
     /// </summary>
     private void OnDragAreaMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
@@ -395,31 +464,19 @@ public partial class MainWindow : Window
         }
     }
 
-    // 레이어 드래그 앤 드롭용 필드
-    // Fields for layer drag and drop
-    private Point _layerDragStartPoint;
-    private bool _isLayerDragging;
+    #endregion
 
-    /// <summary>
-    /// 레이어 리스트 마우스 다운 처리
-    /// Handle layer list mouse down
-    /// </summary>
+    #region 레이어 리스트 드래그 앤 드롭
+
     private void OnLayerListPreviewMouseDown(object sender, MouseButtonEventArgs e)
     {
         _layerDragStartPoint = e.GetPosition(null);
         _isLayerDragging = false;
     }
 
-    /// <summary>
-    /// 레이어 리스트 마우스 이동 처리
-    /// Handle layer list mouse move
-    /// </summary>
     private void OnLayerListPreviewMouseMove(object sender, MouseEventArgs e)
     {
-        if (e.LeftButton != MouseButtonState.Pressed)
-        {
-            return;
-        }
+        if (e.LeftButton != MouseButtonState.Pressed) return;
 
         var currentPos = e.GetPosition(null);
         var diff = _layerDragStartPoint - currentPos;
@@ -436,37 +493,19 @@ public partial class MainWindow : Window
         }
     }
 
-    /// <summary>
-    /// 레이어 리스트 드롭 처리
-    /// Handle layer list drop
-    /// </summary>
     private void OnLayerListDrop(object sender, DragEventArgs e)
     {
-        if (!e.Data.GetDataPresent("LayerIndex"))
-        {
-            return;
-        }
+        if (!e.Data.GetDataPresent("LayerIndex")) return;
 
         var sourceIndex = (int)e.Data.GetData("LayerIndex")!;
-
-        // 드롭 위치 계산
-        // Calculate drop position
         var targetIndex = GetDropTargetIndex(e);
-        if (targetIndex < 0 || sourceIndex == targetIndex)
-        {
-            return;
-        }
 
-        // 레이어 순서 변경
-        // Reorder layers
+        if (targetIndex < 0 || sourceIndex == targetIndex) return;
+
         ReorderLayer(sourceIndex, targetIndex);
         _isLayerDragging = false;
     }
 
-    /// <summary>
-    /// 드롭 대상 인덱스 계산
-    /// Calculate drop target index
-    /// </summary>
     private int GetDropTargetIndex(DragEventArgs e)
     {
         var targetIndex = -1;
@@ -474,11 +513,7 @@ public partial class MainWindow : Window
 
         for (var i = 0; i < LayerListBox.Items.Count; i++)
         {
-            var item = LayerListBox.ItemContainerGenerator.ContainerFromIndex(i) as ListBoxItem;
-            if (item is null)
-            {
-                continue;
-            }
+            if (LayerListBox.ItemContainerGenerator.ContainerFromIndex(i) is not ListBoxItem item) continue;
 
             var itemPos = item.TranslatePoint(new Point(0, 0), LayerListBox);
             var itemHeight = item.ActualHeight;
@@ -490,8 +525,6 @@ public partial class MainWindow : Window
             }
         }
 
-        // 마지막 항목 아래에 드롭한 경우
-        // Dropped below the last item
         if (targetIndex < 0 && LayerListBox.Items.Count > 0)
         {
             targetIndex = LayerListBox.Items.Count - 1;
@@ -500,10 +533,6 @@ public partial class MainWindow : Window
         return targetIndex;
     }
 
-    /// <summary>
-    /// 레이어 순서 변경
-    /// Reorder layer
-    /// </summary>
     private void ReorderLayer(int sourceIndex, int targetIndex)
     {
         var layers = _viewModel.Layers.OrderBy(l => l.ZIndex).ToList();
@@ -514,8 +543,6 @@ public partial class MainWindow : Window
             return;
         }
 
-        // Z-Index 재할당 (1부터 시작, 0은 배경용)
-        // Reassign Z-Index (starting from 1, 0 is for background)
         var movedLayer = layers[sourceIndex];
         layers.RemoveAt(sourceIndex);
         layers.Insert(targetIndex, movedLayer);
@@ -529,162 +556,24 @@ public partial class MainWindow : Window
         UpdateUI();
     }
 
+    #endregion
+
+    #region 배경/레이어 관리
+
     /// <summary>
-    /// 전역 키보드 입력 처리
-    /// Handle global key press
+    /// 배경 이미지를 콘텐츠 영역에 맞게 스케일
     /// </summary>
-    private void OnGlobalKeyPressed(object? sender, Key key)
+    private void ScaleBackgroundToWindow()
     {
-        if (key == Key.F12)
-        {
-            Dispatcher.Invoke(() =>
-            {
-                _windowModeService.ToggleMode();
-            });
-        }
+        if (_viewModel.BackgroundLayer is null) return;
+
+        var contentWidth = _windowModeService.CurrentMode == AppMode.Edit
+            ? ActualWidth - EditorPanelWidth
+            : ActualWidth;
+
+        ParallaxCanvas.ScaleBackgroundToFit(_viewModel.BackgroundLayer.Id, contentWidth, ActualHeight);
     }
 
-    // 에디터 패널 너비
-    // Editor panel width
-    private const double EditorPanelWidth = 200;
-
-    // 원래 창 너비 (Edit 모드 전환 시 복원용)
-    // Original window width (for restoration when exiting Edit mode)
-    private double _originalWindowWidth;
-
-    /// <summary>
-    /// 모드 변경 처리
-    /// Handle mode change
-    /// </summary>
-    private void OnModeChanged(object? sender, AppMode mode)
-    {
-        Dispatcher.Invoke(() =>
-        {
-            var isEditMode = mode == AppMode.Edit;
-
-            if (isEditMode)
-            {
-                // Edit 모드 진입: 창 확장
-                // Entering Edit mode: expand window
-                _originalWindowWidth = Width;
-                Width = _originalWindowWidth + EditorPanelWidth;
-                EditorColumn.Width = new GridLength(EditorPanelWidth);
-                EditorPanel.Visibility = Visibility.Visible;
-                DragArea.Visibility = Visibility.Visible;
-
-                // UI 갱신
-                // Update UI
-                UpdateUI();
-
-                // SelectionOverlay 크기 설정 (레이아웃 업데이트 후 실행)
-                // Set SelectionOverlay size (after layout update)
-                Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, () =>
-                {
-                    UpdateSelectionOverlaySize();
-                });
-            }
-            else
-            {
-                // Edit 모드 종료: 창 복원
-                // Exiting Edit mode: restore window
-                EditorColumn.Width = new GridLength(0);
-                EditorPanel.Visibility = Visibility.Collapsed;
-                DragArea.Visibility = Visibility.Collapsed;
-                Width = _originalWindowWidth > 0 ? _originalWindowWidth : Width - EditorPanelWidth;
-                ClearLayerSelection();
-
-                // 설정 자동 저장
-                // Auto-save settings
-                _ = SaveSettingsAsync();
-            }
-
-            SelectionOverlay.Visibility = isEditMode
-                ? Visibility.Visible
-                : Visibility.Collapsed;
-
-            _viewModel.CurrentMode = mode;
-            _trayIconService.UpdateMode(mode);
-        });
-    }
-
-    /// <summary>
-    /// SelectionOverlay 크기 업데이트
-    /// Update SelectionOverlay size
-    /// </summary>
-    private void UpdateSelectionOverlaySize()
-    {
-        // ContentGrid의 실제 크기로 설정
-        // Set to ContentGrid's actual size
-        SelectionOverlay.Width = ContentGrid.ActualWidth;
-        SelectionOverlay.Height = ContentGrid.ActualHeight;
-    }
-
-    /// <summary>
-    /// 트레이 아이콘에서 종료 요청
-    /// Exit requested from tray icon
-    /// </summary>
-    private void OnExitRequested(object? sender, EventArgs e)
-    {
-        Dispatcher.Invoke(() =>
-        {
-            System.Windows.Application.Current.Shutdown();
-        });
-    }
-
-    /// <summary>
-    /// 트레이 아이콘에서 모드 전환 요청
-    /// Mode toggle requested from tray icon
-    /// </summary>
-    private void OnModeToggleRequested(object? sender, EventArgs e)
-    {
-        Dispatcher.Invoke(() =>
-        {
-            _windowModeService.ToggleMode();
-        });
-    }
-
-    /// <summary>
-    /// 트레이 아이콘에서 Edit 모드 요청
-    /// Edit mode requested from tray icon
-    /// </summary>
-    private void OnEditModeRequested(object? sender, EventArgs e)
-    {
-        Dispatcher.Invoke(() =>
-        {
-            _windowModeService.SetMode(AppMode.Edit);
-        });
-    }
-
-    /// <summary>
-    /// 전역 마우스 이동 처리
-    /// Handle global mouse move
-    /// </summary>
-    private void OnGlobalMouseMoved(object? sender, Point position)
-    {
-        Dispatcher.Invoke(() =>
-        {
-            // Edit 모드에서는 Parallax 효과 비활성화
-            // Disable parallax effect in Edit mode
-            if (_windowModeService.CurrentMode == AppMode.Edit)
-            {
-                return;
-            }
-
-            var (normalizedX, normalizedY) = _mouseTrackingService.GetNormalizedPosition(position);
-            _viewModel.UpdateMousePosition(normalizedX, normalizedY);
-
-            // ParallaxCanvas 업데이트
-            // Update ParallaxCanvas
-            var offsets = _viewModel.GetAllLayers().Select(l => (l.Id, l.CurrentOffsetX, l.CurrentOffsetY)).ToList();
-
-            ParallaxCanvas.UpdateAllOffsets(offsets);
-        });
-    }
-
-    /// <summary>
-    /// 배경 설정 클릭
-    /// Set background click
-    /// </summary>
     private void OnSetBackgroundClick(object sender, RoutedEventArgs e)
     {
         var dialog = new OpenFileDialog
@@ -693,36 +582,24 @@ public partial class MainWindow : Window
             Title = "Select background image"
         };
 
-        if (dialog.ShowDialog() == true)
+        if (dialog.ShowDialog() != true) return;
+
+        if (_viewModel.BackgroundLayer is not null)
         {
-            // 기존 배경 제거
-            // Remove existing background
-            if (_viewModel.BackgroundLayer is not null)
-            {
-                ParallaxCanvas.RemoveLayer(_viewModel.BackgroundLayer.Id);
-            }
-
-            _viewModel.SetBackgroundCommand.Execute(dialog.FileName);
-
-            // ParallaxCanvas에 배경 추가
-            // Add background to ParallaxCanvas
-            if (_viewModel.BackgroundLayer is not null)
-            {
-                ParallaxCanvas.AddLayer(_viewModel.BackgroundLayer.GetEntity());
-
-                // 배경을 창 크기에 맞게 스케일
-                // Scale background to fit window
-                ScaleBackgroundToWindow();
-            }
-
-            UpdateUI();
+            ParallaxCanvas.RemoveLayer(_viewModel.BackgroundLayer.Id);
         }
+
+        _viewModel.SetBackgroundCommand.Execute(dialog.FileName);
+
+        if (_viewModel.BackgroundLayer is not null)
+        {
+            ParallaxCanvas.AddLayer(_viewModel.BackgroundLayer.GetEntity());
+            ScaleBackgroundToWindow();
+        }
+
+        UpdateUI();
     }
 
-    /// <summary>
-    /// 배경 제거 클릭
-    /// Remove background click
-    /// </summary>
     private void OnRemoveBackgroundClick(object sender, RoutedEventArgs e)
     {
         if (_viewModel.BackgroundLayer is not null)
@@ -734,10 +611,6 @@ public partial class MainWindow : Window
         UpdateUI();
     }
 
-    /// <summary>
-    /// 레이어 추가 클릭
-    /// Add layer click
-    /// </summary>
     private void OnAddLayerClick(object sender, RoutedEventArgs e)
     {
         var dialog = new OpenFileDialog
@@ -746,67 +619,29 @@ public partial class MainWindow : Window
             Title = "Select layer image"
         };
 
-        if (dialog.ShowDialog() == true)
+        if (dialog.ShowDialog() != true) return;
+
+        _viewModel.AddLayerCommand.Execute(dialog.FileName);
+
+        var layer = _viewModel.Layers.LastOrDefault();
+        if (layer is not null)
         {
-            _viewModel.AddLayerCommand.Execute(dialog.FileName);
-
-            // ParallaxCanvas에 레이어 추가
-            // Add layer to ParallaxCanvas
-            var layer = _viewModel.Layers.LastOrDefault();
-            if (layer is not null)
-            {
-                ParallaxCanvas.AddLayer(layer.GetEntity());
-            }
-
-            UpdateUI();
+            ParallaxCanvas.AddLayer(layer.GetEntity());
         }
+
+        UpdateUI();
     }
 
-    /// <summary>
-    /// 프리셋 변경
-    /// Preset changed
-    /// </summary>
+    #endregion
+
+    #region 파티클 프리셋
+
     private void OnPresetChanged(ParticleType type)
     {
         _viewModel.SetPresetCommand.Execute(type);
         UpdateParticleCanvas();
     }
 
-    /// <summary>
-    /// UI 갱신
-    /// Update UI
-    /// </summary>
-    private void UpdateUI()
-    {
-        // 배경 경로 표시
-        // Display background path
-        BackgroundPathText.Text = string.IsNullOrEmpty(_viewModel.BackgroundImagePath)
-            ? "(None)"
-            : Path.GetFileName(_viewModel.BackgroundImagePath);
-
-        // 레이어 리스트 갱신 (파일명 표시)
-        // Update layer list (show filename)
-        LayerListBox.ItemsSource = null;
-        LayerListBox.ItemsSource = _viewModel.Layers
-            .OrderBy(l => l.ZIndex)
-            .Select(l => $"Z:{l.ZIndex} - {Path.GetFileName(l.ImagePath)}")
-            .ToList();
-
-        // 프리셋 라디오 버튼 갱신
-        // Update preset radio buttons
-        PresetNoneRadio.IsChecked = _viewModel.PresetType == ParticleType.None;
-        PresetSnowRadio.IsChecked = _viewModel.PresetType == ParticleType.Snow;
-        PresetRainRadio.IsChecked = _viewModel.PresetType == ParticleType.Rain;
-
-        // 프리셋 Z-Index 텍스트 갱신
-        // Update preset Z-Index text
-        PresetZIndexText.Text = _viewModel.PresetZIndex.ToString();
-    }
-
-    /// <summary>
-    /// 파티클 캔버스 업데이트
-    /// Update particle canvas
-    /// </summary>
     private void UpdateParticleCanvas()
     {
         if (_viewModel.PresetType == ParticleType.None)
@@ -831,398 +666,62 @@ public partial class MainWindow : Window
         }
     }
 
-    #region Undo 기능 (Undo Feature)
+    #endregion
 
-    /// <summary>
-    /// 편집 동작 인터페이스
-    /// Edit action interface
-    /// </summary>
-    private interface IEditAction
+    #region UI 갱신
+
+    private void UpdateUI()
     {
-        void Undo();
-    }
+        BackgroundPathText.Text = string.IsNullOrEmpty(_viewModel.BackgroundImagePath)
+            ? "(None)"
+            : Path.GetFileName(_viewModel.BackgroundImagePath);
 
-    /// <summary>
-    /// 이동 동작
-    /// Move action
-    /// </summary>
-    private sealed class MoveAction(UI.Controls.ParallaxCanvas canvas, Guid layerId, double oldX, double oldY) : IEditAction
-    {
-        public void Undo() => canvas.UpdateLayerPosition(layerId, oldX, oldY);
-    }
+        LayerListBox.ItemsSource = null;
+        LayerListBox.ItemsSource = _viewModel.Layers
+            .OrderBy(l => l.ZIndex)
+            .Select(l => $"Z:{l.ZIndex} - {Path.GetFileName(l.ImagePath)}")
+            .ToList();
 
-    /// <summary>
-    /// 리사이즈 동작
-    /// Resize action
-    /// </summary>
-    private sealed class ResizeAction(UI.Controls.ParallaxCanvas canvas, Guid layerId, Rect oldBounds) : IEditAction
-    {
-        public void Undo() => canvas.UpdateLayerTransform(layerId, oldBounds.X, oldBounds.Y, oldBounds.Width, oldBounds.Height);
-    }
+        PresetNoneRadio.IsChecked = _viewModel.PresetType == ParticleType.None;
+        PresetSnowRadio.IsChecked = _viewModel.PresetType == ParticleType.Snow;
+        PresetRainRadio.IsChecked = _viewModel.PresetType == ParticleType.Rain;
 
-    /// <summary>
-    /// 회전 동작
-    /// Rotate action
-    /// </summary>
-    private sealed class RotateAction(UI.Controls.ParallaxCanvas canvas, Guid layerId, double oldRotation) : IEditAction
-    {
-        public void Undo() => canvas.UpdateLayerRotation(layerId, oldRotation);
-    }
-
-    // Undo 스택
-    // Undo stack
-    private readonly Stack<IEditAction> _undoStack = new();
-    private const int MaxUndoCount = 50;
-
-    /// <summary>
-    /// Undo 액션 추가
-    /// Push undo action
-    /// </summary>
-    private void PushUndoAction(IEditAction action)
-    {
-        _undoStack.Push(action);
-
-        // 최대 개수 제한
-        // Limit maximum count
-        if (_undoStack.Count > MaxUndoCount)
-        {
-            var tempStack = new Stack<IEditAction>();
-            for (var i = 0; i < MaxUndoCount; i++)
-            {
-                tempStack.Push(_undoStack.Pop());
-            }
-            _undoStack.Clear();
-            while (tempStack.Count > 0)
-            {
-                _undoStack.Push(tempStack.Pop());
-            }
-        }
-    }
-
-    /// <summary>
-    /// Undo 실행
-    /// Perform undo
-    /// </summary>
-    private void PerformUndo()
-    {
-        if (_undoStack.Count == 0) return;
-
-        var action = _undoStack.Pop();
-        action.Undo();
-        UpdateSelectionIndicators();
+        PresetZIndexText.Text = _viewModel.PresetZIndex.ToString();
     }
 
     #endregion
 
-    #region 이미지 조작 (Image Manipulation)
-
-    // 선택된 레이어 ID
-    // Selected layer ID
-    private Guid? _selectedLayerId;
-
-    // 드래그 상태
-    // Drag state
-    private bool _isDraggingLayer;
-    private bool _isResizingLayer;
-    private Point _manipulationStartPoint;
-    private Rect _originalBounds;
-
-    // 리사이즈 방향
-    // Resize direction
-    private ResizeDirection _resizeDirection;
-
-    // 선택 표시 요소들
-    // Selection indicator elements
-    private System.Windows.Shapes.Rectangle? _selectionRect;
-    private readonly List<System.Windows.Shapes.Rectangle> _resizeHandles = [];
-
-    // 회전 상태
-    // Rotation state
-    private bool _isRotatingLayer;
-    private double _rotationStartAngle;
-    private Point _rotationCenter;
-    private double _originalRotation;
-
-    // 회전 핸들
-    // Rotation handle
-    private System.Windows.Shapes.Ellipse? _rotationHandle;
-    private const double RotationHandleSize = 12;
-    private const double RotationHandleOffset = 30;
-
-    // 핸들 크기
-    // Handle size
-    private const double HandleSize = 8;
+    #region 레이어 선택 및 조작
 
     /// <summary>
-    /// 리사이즈 방향 열거형
-    /// Resize direction enum
+    /// Undo 실행
     /// </summary>
-    private enum ResizeDirection
+    private void PerformUndo()
     {
-        None,
-        TopLeft, Top, TopRight,
-        Left, Right,
-        BottomLeft, Bottom, BottomRight
-    }
+        if (_undoService is null || !_undoService.CanUndo) return;
 
-    /// <summary>
-    /// 선택 오버레이 마우스 다운 처리
-    /// Handle selection overlay mouse down
-    /// </summary>
-    private void OnSelectionOverlayMouseDown(object sender, MouseButtonEventArgs e)
-    {
-        if (_windowModeService.CurrentMode != AppMode.Edit)
-        {
-            return;
-        }
-
-        var pos = e.GetPosition(ParallaxCanvas);
-        var overlayPos = e.GetPosition(SelectionOverlay);
-
-        // 회전 핸들 체크
-        // Check rotation handle
-        if (IsPointOnRotationHandle(overlayPos) && _selectedLayerId.HasValue)
-        {
-            _isRotatingLayer = true;
-            var bounds = ParallaxCanvas.GetLayerBounds(_selectedLayerId.Value) ?? new Rect();
-            _rotationCenter = new Point(bounds.X + bounds.Width / 2, bounds.Y + bounds.Height / 2);
-            _rotationStartAngle = GetAngleFromCenter(_rotationCenter, pos);
-            _originalRotation = ParallaxCanvas.GetLayerRotation(_selectedLayerId.Value);
-            SelectionOverlay.CaptureMouse();
-            e.Handled = true;
-            return;
-        }
-
-        // 리사이즈 핸들 체크
-        // Check resize handles
-        _resizeDirection = GetResizeDirection(overlayPos);
-        if (_resizeDirection != ResizeDirection.None && _selectedLayerId.HasValue)
-        {
-            _isResizingLayer = true;
-            _manipulationStartPoint = pos;
-            _originalBounds = ParallaxCanvas.GetLayerBounds(_selectedLayerId.Value) ?? new Rect();
-            SelectionOverlay.CaptureMouse();
-            e.Handled = true;
-            return;
-        }
-
-        // 레이어 히트 테스트
-        // Layer hit test
-        var hitLayerId = ParallaxCanvas.HitTestLayer(pos);
-
-        // 배경 레이어는 선택 불가
-        // Background layer cannot be selected
-        if (hitLayerId.HasValue && !ParallaxCanvas.IsBackgroundLayer(hitLayerId.Value))
-        {
-            SelectLayer(hitLayerId.Value);
-            _isDraggingLayer = true;
-            _manipulationStartPoint = pos;
-            _originalBounds = ParallaxCanvas.GetLayerBounds(hitLayerId.Value) ?? new Rect();
-            SelectionOverlay.CaptureMouse();
-        }
-        else
-        {
-            ClearLayerSelection();
-        }
-
-        e.Handled = true;
-    }
-
-    /// <summary>
-    /// 선택 오버레이 마우스 업 처리
-    /// Handle selection overlay mouse up
-    /// </summary>
-    private void OnSelectionOverlayMouseUp(object sender, MouseButtonEventArgs e)
-    {
-        // 드래그 완료 시 Undo 액션 기록
-        // Record undo action when drag is completed
-        if (_isDraggingLayer && _selectedLayerId.HasValue)
-        {
-            var newBounds = ParallaxCanvas.GetLayerBounds(_selectedLayerId.Value) ?? new Rect();
-            if (Math.Abs(_originalBounds.X - newBounds.X) > 0.01 ||
-                Math.Abs(_originalBounds.Y - newBounds.Y) > 0.01)
-            {
-                PushUndoAction(new MoveAction(ParallaxCanvas, _selectedLayerId.Value, _originalBounds.X, _originalBounds.Y));
-            }
-        }
-
-        // 리사이즈 완료 시 Undo 액션 기록
-        // Record undo action when resize is completed
-        if (_isResizingLayer && _selectedLayerId.HasValue)
-        {
-            var newBounds = ParallaxCanvas.GetLayerBounds(_selectedLayerId.Value) ?? new Rect();
-            if (Math.Abs(_originalBounds.Width - newBounds.Width) > 0.01 ||
-                Math.Abs(_originalBounds.Height - newBounds.Height) > 0.01)
-            {
-                PushUndoAction(new ResizeAction(ParallaxCanvas, _selectedLayerId.Value, _originalBounds));
-            }
-        }
-
-        // 회전 완료 시 Undo 액션 기록
-        // Record undo action when rotation is completed
-        if (_isRotatingLayer && _selectedLayerId.HasValue)
-        {
-            var newRotation = ParallaxCanvas.GetLayerRotation(_selectedLayerId.Value);
-            if (Math.Abs(_originalRotation - newRotation) > 0.01)
-            {
-                PushUndoAction(new RotateAction(ParallaxCanvas, _selectedLayerId.Value, _originalRotation));
-            }
-        }
-
-        _isDraggingLayer = false;
-        _isResizingLayer = false;
-        _isRotatingLayer = false;
-        _resizeDirection = ResizeDirection.None;
-        SelectionOverlay.ReleaseMouseCapture();
-    }
-
-    /// <summary>
-    /// 선택 오버레이 마우스 이동 처리
-    /// Handle selection overlay mouse move
-    /// </summary>
-    private void OnSelectionOverlayMouseMove(object sender, MouseEventArgs e)
-    {
-        if (_windowModeService.CurrentMode != AppMode.Edit || !_selectedLayerId.HasValue)
-        {
-            return;
-        }
-
-        var currentPos = e.GetPosition(ParallaxCanvas);
-
-        // 레이어 회전
-        // Rotate layer
-        if (_isRotatingLayer)
-        {
-            var currentAngle = GetAngleFromCenter(_rotationCenter, currentPos);
-            var deltaAngle = currentAngle - _rotationStartAngle;
-            var newRotation = _originalRotation + deltaAngle;
-
-            ParallaxCanvas.UpdateLayerRotation(_selectedLayerId.Value, newRotation);
-            UpdateSelectionIndicators();
-        }
-        // 레이어 이동
-        // Move layer
-        else if (_isDraggingLayer)
-        {
-            var deltaX = currentPos.X - _manipulationStartPoint.X;
-            var deltaY = currentPos.Y - _manipulationStartPoint.Y;
-
-            var newX = _originalBounds.X + deltaX;
-            var newY = _originalBounds.Y + deltaY;
-
-            ParallaxCanvas.UpdateLayerPosition(_selectedLayerId.Value, newX, newY);
-            UpdateSelectionIndicators();
-        }
-        // 레이어 리사이즈
-        // Resize layer
-        else if (_isResizingLayer)
-        {
-            var deltaX = currentPos.X - _manipulationStartPoint.X;
-            var deltaY = currentPos.Y - _manipulationStartPoint.Y;
-
-            var newBounds = CalculateResizedBounds(deltaX, deltaY);
-            ParallaxCanvas.UpdateLayerTransform(
-                _selectedLayerId.Value,
-                newBounds.X, newBounds.Y,
-                newBounds.Width, newBounds.Height);
-            UpdateSelectionIndicators();
-        }
-        // 커서 업데이트
-        // Update cursor
-        else
-        {
-            var overlayPos = e.GetPosition(SelectionOverlay);
-            if (IsPointOnRotationHandle(overlayPos))
-            {
-                SelectionOverlay.Cursor = Cursors.Hand;
-            }
-            else
-            {
-                var direction = GetResizeDirection(overlayPos);
-                SelectionOverlay.Cursor = GetResizeCursor(direction);
-            }
-        }
-    }
-
-    /// <summary>
-    /// 레이어 선택
-    /// Select layer
-    /// </summary>
-    private void SelectLayer(Guid layerId)
-    {
-        _selectedLayerId = layerId;
-        CreateSelectionIndicators();
+        _undoService.Undo();
         UpdateSelectionIndicators();
     }
 
     /// <summary>
-    /// 레이어 선택 해제
-    /// Clear layer selection
-    /// </summary>
-    private void ClearLayerSelection()
-    {
-        _selectedLayerId = null;
-        _isDraggingLayer = false;
-        _isResizingLayer = false;
-        _isRotatingLayer = false;
-
-        // UI 요소 제거
-        // Remove UI elements
-        ClearSelectionUI();
-    }
-
-    /// <summary>
-    /// 선택 UI 요소만 제거 (선택 ID는 유지)
-    /// Clear selection UI elements only (keep selected ID)
-    /// </summary>
-    private void ClearSelectionUI()
-    {
-        if (_selectionRect is not null)
-        {
-            SelectionOverlay.Children.Remove(_selectionRect);
-            _selectionRect = null;
-        }
-
-        if (_rotationHandle is not null)
-        {
-            SelectionOverlay.Children.Remove(_rotationHandle);
-            _rotationHandle = null;
-        }
-
-        foreach (var handle in _resizeHandles)
-        {
-            SelectionOverlay.Children.Remove(handle);
-        }
-        _resizeHandles.Clear();
-    }
-
-    /// <summary>
     /// 선택된 레이어 삭제
-    /// Delete selected layer
     /// </summary>
     private void DeleteSelectedLayer()
     {
-        if (!_selectedLayerId.HasValue) return;
+        if (_layerManipulationService is null || !_layerManipulationService.HasSelection) return;
 
-        var layerId = _selectedLayerId.Value;
+        var layerId = _layerManipulationService.SelectedLayerId!.Value;
 
-        // 배경 레이어인지 확인 (Z-Index 0)
-        // Check if background layer (Z-Index 0)
         if (ParallaxCanvas.IsBackgroundLayer(layerId))
         {
-            // 배경 삭제
-            // Delete background
             ParallaxCanvas.RemoveLayer(layerId);
             _viewModel.RemoveBackgroundCommand.Execute(null);
         }
         else
         {
-            // 전경 레이어 삭제
-            // Delete foreground layer
             ParallaxCanvas.RemoveLayer(layerId);
 
-            // ViewModel에서도 제거
-            // Also remove from ViewModel
             var layerVm = _viewModel.Layers.FirstOrDefault(l => l.Id == layerId);
             if (layerVm is not null)
             {
@@ -1235,343 +734,124 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// 선택 표시 요소 생성
-    /// Create selection indicators
+    /// 레이어 선택 해제
     /// </summary>
-    private void CreateSelectionIndicators()
+    private void ClearLayerSelection()
     {
-        // 기존 UI 요소만 제거 (선택 ID는 유지)
-        // Remove existing UI elements only (keep selected ID)
-        ClearSelectionUI();
-
-        if (!_selectedLayerId.HasValue)
-        {
-            return;
-        }
-
-        // 선택 사각형 생성
-        // Create selection rectangle
-        _selectionRect = new System.Windows.Shapes.Rectangle
-        {
-            Stroke = System.Windows.Media.Brushes.Cyan,
-            StrokeThickness = 2,
-            StrokeDashArray = [4, 2],
-            Fill = System.Windows.Media.Brushes.Transparent
-        };
-        SelectionOverlay.Children.Add(_selectionRect);
-
-        // 리사이즈 핸들 생성 (8개)
-        // Create resize handles (8)
-        for (var i = 0; i < 8; i++)
-        {
-            var handle = new System.Windows.Shapes.Rectangle
-            {
-                Width = HandleSize,
-                Height = HandleSize,
-                Fill = System.Windows.Media.Brushes.White,
-                Stroke = System.Windows.Media.Brushes.Cyan,
-                StrokeThickness = 1
-            };
-            _resizeHandles.Add(handle);
-            SelectionOverlay.Children.Add(handle);
-        }
-
-        // 회전 핸들 생성
-        // Create rotation handle
-        _rotationHandle = new System.Windows.Shapes.Ellipse
-        {
-            Width = RotationHandleSize,
-            Height = RotationHandleSize,
-            Fill = System.Windows.Media.Brushes.LimeGreen,
-            Stroke = System.Windows.Media.Brushes.White,
-            StrokeThickness = 1,
-            Cursor = Cursors.Hand
-        };
-        SelectionOverlay.Children.Add(_rotationHandle);
+        _layerManipulationService?.ClearSelection();
+        _selectionIndicatorService?.ClearIndicators();
     }
 
     /// <summary>
-    /// 선택 표시 요소 위치 업데이트
-    /// Update selection indicators position
+    /// 선택 표시 업데이트
     /// </summary>
     private void UpdateSelectionIndicators()
     {
-        if (!_selectedLayerId.HasValue || _selectionRect is null)
+        if (_layerManipulationService is null || _selectionIndicatorService is null) return;
+        if (!_layerManipulationService.HasSelection) return;
+
+        var bounds = _layerManipulationService.GetSelectedLayerBounds();
+        if (!bounds.HasValue) return;
+
+        var rotation = _layerManipulationService.GetSelectedLayerRotation();
+        _selectionIndicatorService.UpdateIndicators(bounds.Value, rotation);
+    }
+
+    #endregion
+
+    #region 선택 오버레이 이벤트
+
+    private void OnSelectionOverlayMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (_windowModeService.CurrentMode != AppMode.Edit) return;
+        if (_layerManipulationService is null || _selectionIndicatorService is null) return;
+
+        var pos = e.GetPosition(ParallaxCanvas);
+        var overlayPos = e.GetPosition(SelectionOverlay);
+
+        // 회전 핸들 체크
+        if (_selectionIndicatorService.IsPointOnRotationHandle(overlayPos) && _layerManipulationService.HasSelection)
         {
+            _layerManipulationService.StartRotation(pos);
+            SelectionOverlay.CaptureMouse();
+            e.Handled = true;
             return;
         }
 
-        var bounds = ParallaxCanvas.GetLayerBounds(_selectedLayerId.Value);
-        if (!bounds.HasValue)
+        // 리사이즈 핸들 체크
+        var resizeDirection = _selectionIndicatorService.GetResizeDirection(overlayPos);
+        if (resizeDirection != ResizeDirection.None && _layerManipulationService.HasSelection)
         {
+            _layerManipulationService.StartResize(pos, resizeDirection);
+            SelectionOverlay.CaptureMouse();
+            e.Handled = true;
             return;
         }
 
-        var rect = bounds.Value;
-        var rotation = ParallaxCanvas.GetLayerRotation(_selectedLayerId.Value);
+        // 레이어 히트 테스트
+        var hitLayerId = ParallaxCanvas.HitTestLayer(pos);
 
-        // 선택 사각형 위치 및 회전
-        // Selection rectangle position and rotation
-        Canvas.SetLeft(_selectionRect, rect.X);
-        Canvas.SetTop(_selectionRect, rect.Y);
-        _selectionRect.Width = rect.Width;
-        _selectionRect.Height = rect.Height;
-        _selectionRect.RenderTransform = new System.Windows.Media.RotateTransform(rotation, rect.Width / 2, rect.Height / 2);
-
-        // 핸들 위치 (회전 전 로컬 좌표)
-        // Handle positions (local coordinates before rotation)
-        var halfHandle = HandleSize / 2;
-        var localPositions = new Point[]
+        // 배경 레이어는 선택 불가
+        if (hitLayerId.HasValue && !ParallaxCanvas.IsBackgroundLayer(hitLayerId.Value))
         {
-            new(-halfHandle, -halfHandle),                              // TopLeft
-            new(rect.Width / 2 - halfHandle, -halfHandle),              // Top
-            new(rect.Width - halfHandle, -halfHandle),                  // TopRight
-            new(rect.Width - halfHandle, rect.Height / 2 - halfHandle), // Right
-            new(rect.Width - halfHandle, rect.Height - halfHandle),     // BottomRight
-            new(rect.Width / 2 - halfHandle, rect.Height - halfHandle), // Bottom
-            new(-halfHandle, rect.Height - halfHandle),                 // BottomLeft
-            new(-halfHandle, rect.Height / 2 - halfHandle)              // Left
-        };
+            _layerManipulationService.SelectLayer(hitLayerId.Value);
+            _selectionIndicatorService.CreateIndicators();
+            UpdateSelectionIndicators();
 
-        // 회전 변환 행렬
-        // Rotation transformation matrix
-        var rotateMatrix = new System.Windows.Media.Matrix();
-        rotateMatrix.RotateAt(rotation, rect.Width / 2, rect.Height / 2);
-
-        for (var i = 0; i < _resizeHandles.Count && i < localPositions.Length; i++)
+            _layerManipulationService.StartDrag(pos);
+            SelectionOverlay.CaptureMouse();
+        }
+        else
         {
-            // 로컬 좌표를 회전 후 전역 좌표로 변환
-            // Transform local coordinates to global coordinates after rotation
-            var rotatedPoint = rotateMatrix.Transform(localPositions[i]);
-            Canvas.SetLeft(_resizeHandles[i], rect.X + rotatedPoint.X);
-            Canvas.SetTop(_resizeHandles[i], rect.Y + rotatedPoint.Y);
+            ClearLayerSelection();
         }
 
-        // 회전 핸들 위치 (선택 사각형 중앙 위, 회전 적용)
-        // Rotation handle position (above selection rectangle center, with rotation applied)
-        if (_rotationHandle is not null)
-        {
-            var localRotationPos = new Point(rect.Width / 2 - RotationHandleSize / 2, -RotationHandleOffset - RotationHandleSize / 2);
-            var rotatedRotationPos = rotateMatrix.Transform(localRotationPos);
-            Canvas.SetLeft(_rotationHandle, rect.X + rotatedRotationPos.X);
-            Canvas.SetTop(_rotationHandle, rect.Y + rotatedRotationPos.Y);
-        }
+        e.Handled = true;
     }
 
-    /// <summary>
-    /// 마우스 위치로부터 리사이즈 방향 결정
-    /// Determine resize direction from mouse position
-    /// </summary>
-    private ResizeDirection GetResizeDirection(Point pos)
+    private void OnSelectionOverlayMouseUp(object sender, MouseButtonEventArgs e)
     {
-        if (_resizeHandles.Count < 8)
+        _layerManipulationService?.EndAllManipulations();
+        SelectionOverlay.ReleaseMouseCapture();
+    }
+
+    private void OnSelectionOverlayMouseMove(object sender, MouseEventArgs e)
+    {
+        if (_windowModeService.CurrentMode != AppMode.Edit) return;
+        if (_layerManipulationService is null || _selectionIndicatorService is null) return;
+        if (!_layerManipulationService.HasSelection) return;
+
+        var currentPos = e.GetPosition(ParallaxCanvas);
+
+        if (_layerManipulationService.IsRotating)
         {
-            return ResizeDirection.None;
+            _layerManipulationService.UpdateRotation(currentPos);
+            UpdateSelectionIndicators();
         }
-
-        var directions = new[]
+        else if (_layerManipulationService.IsDragging)
         {
-            ResizeDirection.TopLeft, ResizeDirection.Top, ResizeDirection.TopRight,
-            ResizeDirection.Right, ResizeDirection.BottomRight,
-            ResizeDirection.Bottom, ResizeDirection.BottomLeft, ResizeDirection.Left
-        };
-
-        for (var i = 0; i < _resizeHandles.Count; i++)
+            _layerManipulationService.UpdateDrag(currentPos);
+            UpdateSelectionIndicators();
+        }
+        else if (_layerManipulationService.IsResizing)
         {
-            var handle = _resizeHandles[i];
-            var handleRect = new Rect(
-                Canvas.GetLeft(handle),
-                Canvas.GetTop(handle),
-                HandleSize,
-                HandleSize);
-
-            if (handleRect.Contains(pos))
+            _layerManipulationService.UpdateResize(currentPos);
+            UpdateSelectionIndicators();
+        }
+        else
+        {
+            // 커서 업데이트
+            var overlayPos = e.GetPosition(SelectionOverlay);
+            if (_selectionIndicatorService.IsPointOnRotationHandle(overlayPos))
             {
-                return directions[i];
-            }
-        }
-
-        return ResizeDirection.None;
-    }
-
-    /// <summary>
-    /// 리사이즈 방향에 따른 커서 반환
-    /// Get cursor for resize direction
-    /// </summary>
-    private static Cursor GetResizeCursor(ResizeDirection direction)
-    {
-        return direction switch
-        {
-            ResizeDirection.TopLeft or ResizeDirection.BottomRight => Cursors.SizeNWSE,
-            ResizeDirection.TopRight or ResizeDirection.BottomLeft => Cursors.SizeNESW,
-            ResizeDirection.Top or ResizeDirection.Bottom => Cursors.SizeNS,
-            ResizeDirection.Left or ResizeDirection.Right => Cursors.SizeWE,
-            _ => Cursors.Arrow
-        };
-    }
-
-    /// <summary>
-    /// 리사이즈된 경계 계산
-    /// Calculate resized bounds
-    /// </summary>
-    private Rect CalculateResizedBounds(double deltaX, double deltaY)
-    {
-        var x = _originalBounds.X;
-        var y = _originalBounds.Y;
-        var width = _originalBounds.Width;
-        var height = _originalBounds.Height;
-
-        // 최소 크기
-        // Minimum size
-        const double minSize = 20;
-
-        // 원본 비율 (대각선 리사이즈용)
-        // Original aspect ratio (for diagonal resize)
-        var aspectRatio = _originalBounds.Width / _originalBounds.Height;
-
-        // 대각선 방향인지 확인
-        // Check if diagonal direction
-        var isDiagonal = _resizeDirection is ResizeDirection.TopLeft or ResizeDirection.TopRight
-                         or ResizeDirection.BottomLeft or ResizeDirection.BottomRight;
-
-        switch (_resizeDirection)
-        {
-            case ResizeDirection.TopLeft:
-                {
-                    // 비율 유지: 더 큰 변화량 기준으로 계산
-                    // Maintain ratio: calculate based on larger delta
-                    var newWidth = width - deltaX;
-                    var newHeight = newWidth / aspectRatio;
-                    var heightDelta = height - newHeight;
-                    x = _originalBounds.Right - newWidth;
-                    y = _originalBounds.Bottom - newHeight;
-                    width = newWidth;
-                    height = newHeight;
-                }
-                break;
-            case ResizeDirection.Top:
-                y += deltaY;
-                height -= deltaY;
-                break;
-            case ResizeDirection.TopRight:
-                {
-                    // 비율 유지
-                    // Maintain ratio
-                    var newWidth = width + deltaX;
-                    var newHeight = newWidth / aspectRatio;
-                    y = _originalBounds.Bottom - newHeight;
-                    width = newWidth;
-                    height = newHeight;
-                }
-                break;
-            case ResizeDirection.Right:
-                width += deltaX;
-                break;
-            case ResizeDirection.BottomRight:
-                {
-                    // 비율 유지
-                    // Maintain ratio
-                    var newWidth = width + deltaX;
-                    var newHeight = newWidth / aspectRatio;
-                    width = newWidth;
-                    height = newHeight;
-                }
-                break;
-            case ResizeDirection.Bottom:
-                height += deltaY;
-                break;
-            case ResizeDirection.BottomLeft:
-                {
-                    // 비율 유지
-                    // Maintain ratio
-                    var newWidth = width - deltaX;
-                    var newHeight = newWidth / aspectRatio;
-                    x = _originalBounds.Right - newWidth;
-                    width = newWidth;
-                    height = newHeight;
-                }
-                break;
-            case ResizeDirection.Left:
-                x += deltaX;
-                width -= deltaX;
-                break;
-        }
-
-        // 최소 크기 적용
-        // Apply minimum size
-        if (width < minSize)
-        {
-            if (isDiagonal)
-            {
-                // 비율 유지하며 최소 크기 적용
-                // Apply minimum size while maintaining ratio
-                width = minSize;
-                height = minSize / aspectRatio;
+                SelectionOverlay.Cursor = Cursors.Hand;
             }
             else
             {
-                width = minSize;
-            }
-
-            if (_resizeDirection is ResizeDirection.TopLeft or ResizeDirection.Left or ResizeDirection.BottomLeft)
-            {
-                x = _originalBounds.Right - width;
+                var direction = _selectionIndicatorService.GetResizeDirection(overlayPos);
+                SelectionOverlay.Cursor = SelectionIndicatorService.GetResizeCursor(direction);
             }
         }
-
-        if (height < minSize)
-        {
-            if (isDiagonal)
-            {
-                // 비율 유지하며 최소 크기 적용
-                // Apply minimum size while maintaining ratio
-                height = minSize;
-                width = minSize * aspectRatio;
-            }
-            else
-            {
-                height = minSize;
-            }
-
-            if (_resizeDirection is ResizeDirection.TopLeft or ResizeDirection.Top or ResizeDirection.TopRight)
-            {
-                y = _originalBounds.Bottom - height;
-            }
-        }
-
-        return new Rect(x, y, width, height);
-    }
-
-    /// <summary>
-    /// 회전 핸들 위에 포인트가 있는지 확인
-    /// Check if point is on rotation handle
-    /// </summary>
-    private bool IsPointOnRotationHandle(Point point)
-    {
-        if (_rotationHandle is null)
-        {
-            return false;
-        }
-
-        var handleLeft = Canvas.GetLeft(_rotationHandle);
-        var handleTop = Canvas.GetTop(_rotationHandle);
-
-        if (double.IsNaN(handleLeft) || double.IsNaN(handleTop))
-        {
-            return false;
-        }
-
-        var handleRect = new Rect(handleLeft, handleTop, RotationHandleSize, RotationHandleSize);
-        return handleRect.Contains(point);
-    }
-
-    /// <summary>
-    /// 중심점으로부터 각도 계산
-    /// Calculate angle from center point
-    /// </summary>
-    private static double GetAngleFromCenter(Point center, Point point)
-    {
-        return Math.Atan2(point.Y - center.Y, point.X - center.X) * 180 / Math.PI;
     }
 
     #endregion
