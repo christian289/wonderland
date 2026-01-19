@@ -103,6 +103,36 @@ public sealed class LayerSettings
     /// Maximum Y offset
     /// </summary>
     public double MaxOffsetY { get; set; } = 30;
+
+    /// <summary>
+    /// 레이어 X 좌표
+    /// Layer X position
+    /// </summary>
+    public double? X { get; set; }
+
+    /// <summary>
+    /// 레이어 Y 좌표
+    /// Layer Y position
+    /// </summary>
+    public double? Y { get; set; }
+
+    /// <summary>
+    /// 레이어 너비
+    /// Layer width
+    /// </summary>
+    public double? Width { get; set; }
+
+    /// <summary>
+    /// 레이어 높이
+    /// Layer height
+    /// </summary>
+    public double? Height { get; set; }
+
+    /// <summary>
+    /// 레이어 회전 각도 (도)
+    /// Layer rotation angle (degrees)
+    /// </summary>
+    public double Rotation { get; set; }
 }
 
 /// <summary>

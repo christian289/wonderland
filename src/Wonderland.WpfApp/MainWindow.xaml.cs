@@ -191,6 +191,26 @@ public partial class MainWindow : Window
                     layer.MaxOffsetY = layerSetting.MaxOffsetY;
 
                     ParallaxCanvas.AddLayer(layer.GetEntity());
+
+                    // 레이어 변환 정보 적용 (저장된 위치가 있는 경우)
+                    // Apply layer transform data (if saved position exists)
+                    if (layerSetting.X.HasValue && layerSetting.Y.HasValue &&
+                        layerSetting.Width.HasValue && layerSetting.Height.HasValue)
+                    {
+                        ParallaxCanvas.UpdateLayerTransform(
+                            layer.Id,
+                            layerSetting.X.Value,
+                            layerSetting.Y.Value,
+                            layerSetting.Width.Value,
+                            layerSetting.Height.Value);
+                    }
+
+                    // 회전 정보 적용
+                    // Apply rotation data
+                    if (Math.Abs(layerSetting.Rotation) > 0.01)
+                    {
+                        ParallaxCanvas.UpdateLayerRotation(layer.Id, layerSetting.Rotation);
+                    }
                 }
             }
         }
@@ -250,14 +270,27 @@ public partial class MainWindow : Window
                 Top = Top
             },
             BackgroundImagePath = _viewModel.BackgroundImagePath,
-            Layers = _viewModel.Layers.Select(l => new LayerSettings
+            Layers = _viewModel.Layers.Select(l =>
             {
-                ImagePath = l.ImagePath,
-                Name = l.Name,
-                ZIndex = l.ZIndex,
-                DepthFactor = l.DepthFactor,
-                MaxOffsetX = l.MaxOffsetX,
-                MaxOffsetY = l.MaxOffsetY
+                // ParallaxCanvas에서 레이어 변환 정보 가져오기
+                // Get layer transform data from ParallaxCanvas
+                var bounds = ParallaxCanvas.GetLayerBounds(l.Id);
+                var rotation = ParallaxCanvas.GetLayerRotation(l.Id);
+
+                return new LayerSettings
+                {
+                    ImagePath = l.ImagePath,
+                    Name = l.Name,
+                    ZIndex = l.ZIndex,
+                    DepthFactor = l.DepthFactor,
+                    MaxOffsetX = l.MaxOffsetX,
+                    MaxOffsetY = l.MaxOffsetY,
+                    X = bounds?.X,
+                    Y = bounds?.Y,
+                    Width = bounds?.Width,
+                    Height = bounds?.Height,
+                    Rotation = rotation
+                };
             }).ToList(),
             ParticlePreset = new ParticlePresetSettings
             {
@@ -331,6 +364,20 @@ public partial class MainWindow : Window
         else if (e.Key == Key.Escape && _windowModeService.CurrentMode == AppMode.Edit)
         {
             _windowModeService.SetMode(AppMode.Viewer);
+            e.Handled = true;
+        }
+        // Ctrl+Z: Undo
+        else if (e.Key == Key.Z && Keyboard.Modifiers == ModifierKeys.Control &&
+                 _windowModeService.CurrentMode == AppMode.Edit)
+        {
+            PerformUndo();
+            e.Handled = true;
+        }
+        // Delete: 선택된 레이어 삭제
+        // Delete: Delete selected layer
+        else if (e.Key == Key.Delete && _windowModeService.CurrentMode == AppMode.Edit)
+        {
+            DeleteSelectedLayer();
             e.Handled = true;
         }
     }
@@ -545,6 +592,10 @@ public partial class MainWindow : Window
                 DragArea.Visibility = Visibility.Collapsed;
                 Width = _originalWindowWidth > 0 ? _originalWindowWidth : Width - EditorPanelWidth;
                 ClearLayerSelection();
+
+                // 설정 자동 저장
+                // Auto-save settings
+                _ = SaveSettingsAsync();
             }
 
             SelectionOverlay.Visibility = isEditMode
@@ -780,6 +831,89 @@ public partial class MainWindow : Window
         }
     }
 
+    #region Undo 기능 (Undo Feature)
+
+    /// <summary>
+    /// 편집 동작 인터페이스
+    /// Edit action interface
+    /// </summary>
+    private interface IEditAction
+    {
+        void Undo();
+    }
+
+    /// <summary>
+    /// 이동 동작
+    /// Move action
+    /// </summary>
+    private sealed class MoveAction(UI.Controls.ParallaxCanvas canvas, Guid layerId, double oldX, double oldY) : IEditAction
+    {
+        public void Undo() => canvas.UpdateLayerPosition(layerId, oldX, oldY);
+    }
+
+    /// <summary>
+    /// 리사이즈 동작
+    /// Resize action
+    /// </summary>
+    private sealed class ResizeAction(UI.Controls.ParallaxCanvas canvas, Guid layerId, Rect oldBounds) : IEditAction
+    {
+        public void Undo() => canvas.UpdateLayerTransform(layerId, oldBounds.X, oldBounds.Y, oldBounds.Width, oldBounds.Height);
+    }
+
+    /// <summary>
+    /// 회전 동작
+    /// Rotate action
+    /// </summary>
+    private sealed class RotateAction(UI.Controls.ParallaxCanvas canvas, Guid layerId, double oldRotation) : IEditAction
+    {
+        public void Undo() => canvas.UpdateLayerRotation(layerId, oldRotation);
+    }
+
+    // Undo 스택
+    // Undo stack
+    private readonly Stack<IEditAction> _undoStack = new();
+    private const int MaxUndoCount = 50;
+
+    /// <summary>
+    /// Undo 액션 추가
+    /// Push undo action
+    /// </summary>
+    private void PushUndoAction(IEditAction action)
+    {
+        _undoStack.Push(action);
+
+        // 최대 개수 제한
+        // Limit maximum count
+        if (_undoStack.Count > MaxUndoCount)
+        {
+            var tempStack = new Stack<IEditAction>();
+            for (var i = 0; i < MaxUndoCount; i++)
+            {
+                tempStack.Push(_undoStack.Pop());
+            }
+            _undoStack.Clear();
+            while (tempStack.Count > 0)
+            {
+                _undoStack.Push(tempStack.Pop());
+            }
+        }
+    }
+
+    /// <summary>
+    /// Undo 실행
+    /// Perform undo
+    /// </summary>
+    private void PerformUndo()
+    {
+        if (_undoStack.Count == 0) return;
+
+        var action = _undoStack.Pop();
+        action.Undo();
+        UpdateSelectionIndicators();
+    }
+
+    #endregion
+
     #region 이미지 조작 (Image Manipulation)
 
     // 선택된 레이어 ID
@@ -876,7 +1010,9 @@ public partial class MainWindow : Window
         // Layer hit test
         var hitLayerId = ParallaxCanvas.HitTestLayer(pos);
 
-        if (hitLayerId.HasValue)
+        // 배경 레이어는 선택 불가
+        // Background layer cannot be selected
+        if (hitLayerId.HasValue && !ParallaxCanvas.IsBackgroundLayer(hitLayerId.Value))
         {
             SelectLayer(hitLayerId.Value);
             _isDraggingLayer = true;
@@ -898,6 +1034,41 @@ public partial class MainWindow : Window
     /// </summary>
     private void OnSelectionOverlayMouseUp(object sender, MouseButtonEventArgs e)
     {
+        // 드래그 완료 시 Undo 액션 기록
+        // Record undo action when drag is completed
+        if (_isDraggingLayer && _selectedLayerId.HasValue)
+        {
+            var newBounds = ParallaxCanvas.GetLayerBounds(_selectedLayerId.Value) ?? new Rect();
+            if (Math.Abs(_originalBounds.X - newBounds.X) > 0.01 ||
+                Math.Abs(_originalBounds.Y - newBounds.Y) > 0.01)
+            {
+                PushUndoAction(new MoveAction(ParallaxCanvas, _selectedLayerId.Value, _originalBounds.X, _originalBounds.Y));
+            }
+        }
+
+        // 리사이즈 완료 시 Undo 액션 기록
+        // Record undo action when resize is completed
+        if (_isResizingLayer && _selectedLayerId.HasValue)
+        {
+            var newBounds = ParallaxCanvas.GetLayerBounds(_selectedLayerId.Value) ?? new Rect();
+            if (Math.Abs(_originalBounds.Width - newBounds.Width) > 0.01 ||
+                Math.Abs(_originalBounds.Height - newBounds.Height) > 0.01)
+            {
+                PushUndoAction(new ResizeAction(ParallaxCanvas, _selectedLayerId.Value, _originalBounds));
+            }
+        }
+
+        // 회전 완료 시 Undo 액션 기록
+        // Record undo action when rotation is completed
+        if (_isRotatingLayer && _selectedLayerId.HasValue)
+        {
+            var newRotation = ParallaxCanvas.GetLayerRotation(_selectedLayerId.Value);
+            if (Math.Abs(_originalRotation - newRotation) > 0.01)
+            {
+                PushUndoAction(new RotateAction(ParallaxCanvas, _selectedLayerId.Value, _originalRotation));
+            }
+        }
+
         _isDraggingLayer = false;
         _isResizingLayer = false;
         _isRotatingLayer = false;
@@ -927,6 +1098,7 @@ public partial class MainWindow : Window
             var newRotation = _originalRotation + deltaAngle;
 
             ParallaxCanvas.UpdateLayerRotation(_selectedLayerId.Value, newRotation);
+            UpdateSelectionIndicators();
         }
         // 레이어 이동
         // Move layer
@@ -1025,6 +1197,44 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
+    /// 선택된 레이어 삭제
+    /// Delete selected layer
+    /// </summary>
+    private void DeleteSelectedLayer()
+    {
+        if (!_selectedLayerId.HasValue) return;
+
+        var layerId = _selectedLayerId.Value;
+
+        // 배경 레이어인지 확인 (Z-Index 0)
+        // Check if background layer (Z-Index 0)
+        if (ParallaxCanvas.IsBackgroundLayer(layerId))
+        {
+            // 배경 삭제
+            // Delete background
+            ParallaxCanvas.RemoveLayer(layerId);
+            _viewModel.RemoveBackgroundCommand.Execute(null);
+        }
+        else
+        {
+            // 전경 레이어 삭제
+            // Delete foreground layer
+            ParallaxCanvas.RemoveLayer(layerId);
+
+            // ViewModel에서도 제거
+            // Also remove from ViewModel
+            var layerVm = _viewModel.Layers.FirstOrDefault(l => l.Id == layerId);
+            if (layerVm is not null)
+            {
+                _viewModel.Layers.Remove(layerVm);
+            }
+        }
+
+        ClearLayerSelection();
+        UpdateUI();
+    }
+
+    /// <summary>
     /// 선택 표시 요소 생성
     /// Create selection indicators
     /// </summary>
@@ -1098,41 +1308,53 @@ public partial class MainWindow : Window
         }
 
         var rect = bounds.Value;
+        var rotation = ParallaxCanvas.GetLayerRotation(_selectedLayerId.Value);
 
-        // 선택 사각형 위치
-        // Selection rectangle position
+        // 선택 사각형 위치 및 회전
+        // Selection rectangle position and rotation
         Canvas.SetLeft(_selectionRect, rect.X);
         Canvas.SetTop(_selectionRect, rect.Y);
         _selectionRect.Width = rect.Width;
         _selectionRect.Height = rect.Height;
+        _selectionRect.RenderTransform = new System.Windows.Media.RotateTransform(rotation, rect.Width / 2, rect.Height / 2);
 
-        // 핸들 위치 (시계 방향: TopLeft, Top, TopRight, Right, BottomRight, Bottom, BottomLeft, Left)
-        // Handle positions (clockwise: TopLeft, Top, TopRight, Right, BottomRight, Bottom, BottomLeft, Left)
+        // 핸들 위치 (회전 전 로컬 좌표)
+        // Handle positions (local coordinates before rotation)
         var halfHandle = HandleSize / 2;
-        var positions = new Point[]
+        var localPositions = new Point[]
         {
-            new(rect.X - halfHandle, rect.Y - halfHandle),                          // TopLeft
-            new(rect.X + rect.Width / 2 - halfHandle, rect.Y - halfHandle),         // Top
-            new(rect.X + rect.Width - halfHandle, rect.Y - halfHandle),             // TopRight
-            new(rect.X + rect.Width - halfHandle, rect.Y + rect.Height / 2 - halfHandle), // Right
-            new(rect.X + rect.Width - halfHandle, rect.Y + rect.Height - halfHandle), // BottomRight
-            new(rect.X + rect.Width / 2 - halfHandle, rect.Y + rect.Height - halfHandle), // Bottom
-            new(rect.X - halfHandle, rect.Y + rect.Height - halfHandle),            // BottomLeft
-            new(rect.X - halfHandle, rect.Y + rect.Height / 2 - halfHandle)         // Left
+            new(-halfHandle, -halfHandle),                              // TopLeft
+            new(rect.Width / 2 - halfHandle, -halfHandle),              // Top
+            new(rect.Width - halfHandle, -halfHandle),                  // TopRight
+            new(rect.Width - halfHandle, rect.Height / 2 - halfHandle), // Right
+            new(rect.Width - halfHandle, rect.Height - halfHandle),     // BottomRight
+            new(rect.Width / 2 - halfHandle, rect.Height - halfHandle), // Bottom
+            new(-halfHandle, rect.Height - halfHandle),                 // BottomLeft
+            new(-halfHandle, rect.Height / 2 - halfHandle)              // Left
         };
 
-        for (var i = 0; i < _resizeHandles.Count && i < positions.Length; i++)
+        // 회전 변환 행렬
+        // Rotation transformation matrix
+        var rotateMatrix = new System.Windows.Media.Matrix();
+        rotateMatrix.RotateAt(rotation, rect.Width / 2, rect.Height / 2);
+
+        for (var i = 0; i < _resizeHandles.Count && i < localPositions.Length; i++)
         {
-            Canvas.SetLeft(_resizeHandles[i], positions[i].X);
-            Canvas.SetTop(_resizeHandles[i], positions[i].Y);
+            // 로컬 좌표를 회전 후 전역 좌표로 변환
+            // Transform local coordinates to global coordinates after rotation
+            var rotatedPoint = rotateMatrix.Transform(localPositions[i]);
+            Canvas.SetLeft(_resizeHandles[i], rect.X + rotatedPoint.X);
+            Canvas.SetTop(_resizeHandles[i], rect.Y + rotatedPoint.Y);
         }
 
-        // 회전 핸들 위치 (선택 사각형 중앙 위)
-        // Rotation handle position (above selection rectangle center)
+        // 회전 핸들 위치 (선택 사각형 중앙 위, 회전 적용)
+        // Rotation handle position (above selection rectangle center, with rotation applied)
         if (_rotationHandle is not null)
         {
-            Canvas.SetLeft(_rotationHandle, rect.X + rect.Width / 2 - RotationHandleSize / 2);
-            Canvas.SetTop(_rotationHandle, rect.Y - RotationHandleOffset - RotationHandleSize / 2);
+            var localRotationPos = new Point(rect.Width / 2 - RotationHandleSize / 2, -RotationHandleOffset - RotationHandleSize / 2);
+            var rotatedRotationPos = rotateMatrix.Transform(localRotationPos);
+            Canvas.SetLeft(_rotationHandle, rect.X + rotatedRotationPos.X);
+            Canvas.SetTop(_rotationHandle, rect.Y + rotatedRotationPos.Y);
         }
     }
 
@@ -1203,37 +1425,71 @@ public partial class MainWindow : Window
         // Minimum size
         const double minSize = 20;
 
+        // 원본 비율 (대각선 리사이즈용)
+        // Original aspect ratio (for diagonal resize)
+        var aspectRatio = _originalBounds.Width / _originalBounds.Height;
+
+        // 대각선 방향인지 확인
+        // Check if diagonal direction
+        var isDiagonal = _resizeDirection is ResizeDirection.TopLeft or ResizeDirection.TopRight
+                         or ResizeDirection.BottomLeft or ResizeDirection.BottomRight;
+
         switch (_resizeDirection)
         {
             case ResizeDirection.TopLeft:
-                x += deltaX;
-                y += deltaY;
-                width -= deltaX;
-                height -= deltaY;
+                {
+                    // 비율 유지: 더 큰 변화량 기준으로 계산
+                    // Maintain ratio: calculate based on larger delta
+                    var newWidth = width - deltaX;
+                    var newHeight = newWidth / aspectRatio;
+                    var heightDelta = height - newHeight;
+                    x = _originalBounds.Right - newWidth;
+                    y = _originalBounds.Bottom - newHeight;
+                    width = newWidth;
+                    height = newHeight;
+                }
                 break;
             case ResizeDirection.Top:
                 y += deltaY;
                 height -= deltaY;
                 break;
             case ResizeDirection.TopRight:
-                y += deltaY;
-                width += deltaX;
-                height -= deltaY;
+                {
+                    // 비율 유지
+                    // Maintain ratio
+                    var newWidth = width + deltaX;
+                    var newHeight = newWidth / aspectRatio;
+                    y = _originalBounds.Bottom - newHeight;
+                    width = newWidth;
+                    height = newHeight;
+                }
                 break;
             case ResizeDirection.Right:
                 width += deltaX;
                 break;
             case ResizeDirection.BottomRight:
-                width += deltaX;
-                height += deltaY;
+                {
+                    // 비율 유지
+                    // Maintain ratio
+                    var newWidth = width + deltaX;
+                    var newHeight = newWidth / aspectRatio;
+                    width = newWidth;
+                    height = newHeight;
+                }
                 break;
             case ResizeDirection.Bottom:
                 height += deltaY;
                 break;
             case ResizeDirection.BottomLeft:
-                x += deltaX;
-                width -= deltaX;
-                height += deltaY;
+                {
+                    // 비율 유지
+                    // Maintain ratio
+                    var newWidth = width - deltaX;
+                    var newHeight = newWidth / aspectRatio;
+                    x = _originalBounds.Right - newWidth;
+                    width = newWidth;
+                    height = newHeight;
+                }
                 break;
             case ResizeDirection.Left:
                 x += deltaX;
@@ -1245,19 +1501,41 @@ public partial class MainWindow : Window
         // Apply minimum size
         if (width < minSize)
         {
-            width = minSize;
+            if (isDiagonal)
+            {
+                // 비율 유지하며 최소 크기 적용
+                // Apply minimum size while maintaining ratio
+                width = minSize;
+                height = minSize / aspectRatio;
+            }
+            else
+            {
+                width = minSize;
+            }
+
             if (_resizeDirection is ResizeDirection.TopLeft or ResizeDirection.Left or ResizeDirection.BottomLeft)
             {
-                x = _originalBounds.Right - minSize;
+                x = _originalBounds.Right - width;
             }
         }
 
         if (height < minSize)
         {
-            height = minSize;
+            if (isDiagonal)
+            {
+                // 비율 유지하며 최소 크기 적용
+                // Apply minimum size while maintaining ratio
+                height = minSize;
+                width = minSize * aspectRatio;
+            }
+            else
+            {
+                height = minSize;
+            }
+
             if (_resizeDirection is ResizeDirection.TopLeft or ResizeDirection.Top or ResizeDirection.TopRight)
             {
-                y = _originalBounds.Bottom - minSize;
+                y = _originalBounds.Bottom - height;
             }
         }
 
