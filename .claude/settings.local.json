@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(powershell -Command \"echo $env:USERPROFILE\")",
+      "Bash(dir /b \"C:\\\\Users\")",
+      "mcp__plugin_serena_serena__list_dir",
+      "Bash(dotnet build:*)",
+      "Bash(dotnet run:*)"
+    ]
+  }
+}

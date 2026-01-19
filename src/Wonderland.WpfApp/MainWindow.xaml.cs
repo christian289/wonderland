@@ -802,6 +802,19 @@ public partial class MainWindow : Window
     private System.Windows.Shapes.Rectangle? _selectionRect;
     private readonly List<System.Windows.Shapes.Rectangle> _resizeHandles = [];
 
+    // 회전 상태
+    // Rotation state
+    private bool _isRotatingLayer;
+    private double _rotationStartAngle;
+    private Point _rotationCenter;
+    private double _originalRotation;
+
+    // 회전 핸들
+    // Rotation handle
+    private System.Windows.Shapes.Ellipse? _rotationHandle;
+    private const double RotationHandleSize = 12;
+    private const double RotationHandleOffset = 30;
+
     // 핸들 크기
     // Handle size
     private const double HandleSize = 8;
@@ -830,10 +843,25 @@ public partial class MainWindow : Window
         }
 
         var pos = e.GetPosition(ParallaxCanvas);
+        var overlayPos = e.GetPosition(SelectionOverlay);
+
+        // 회전 핸들 체크
+        // Check rotation handle
+        if (IsPointOnRotationHandle(overlayPos) && _selectedLayerId.HasValue)
+        {
+            _isRotatingLayer = true;
+            var bounds = ParallaxCanvas.GetLayerBounds(_selectedLayerId.Value) ?? new Rect();
+            _rotationCenter = new Point(bounds.X + bounds.Width / 2, bounds.Y + bounds.Height / 2);
+            _rotationStartAngle = GetAngleFromCenter(_rotationCenter, pos);
+            _originalRotation = ParallaxCanvas.GetLayerRotation(_selectedLayerId.Value);
+            SelectionOverlay.CaptureMouse();
+            e.Handled = true;
+            return;
+        }
 
         // 리사이즈 핸들 체크
         // Check resize handles
-        _resizeDirection = GetResizeDirection(e.GetPosition(SelectionOverlay));
+        _resizeDirection = GetResizeDirection(overlayPos);
         if (_resizeDirection != ResizeDirection.None && _selectedLayerId.HasValue)
         {
             _isResizingLayer = true;
@@ -872,6 +900,7 @@ public partial class MainWindow : Window
     {
         _isDraggingLayer = false;
         _isResizingLayer = false;
+        _isRotatingLayer = false;
         _resizeDirection = ResizeDirection.None;
         SelectionOverlay.ReleaseMouseCapture();
     }
@@ -889,9 +918,19 @@ public partial class MainWindow : Window
 
         var currentPos = e.GetPosition(ParallaxCanvas);
 
+        // 레이어 회전
+        // Rotate layer
+        if (_isRotatingLayer)
+        {
+            var currentAngle = GetAngleFromCenter(_rotationCenter, currentPos);
+            var deltaAngle = currentAngle - _rotationStartAngle;
+            var newRotation = _originalRotation + deltaAngle;
+
+            ParallaxCanvas.UpdateLayerRotation(_selectedLayerId.Value, newRotation);
+        }
         // 레이어 이동
         // Move layer
-        if (_isDraggingLayer)
+        else if (_isDraggingLayer)
         {
             var deltaX = currentPos.X - _manipulationStartPoint.X;
             var deltaY = currentPos.Y - _manipulationStartPoint.Y;
@@ -920,8 +959,16 @@ public partial class MainWindow : Window
         // Update cursor
         else
         {
-            var direction = GetResizeDirection(e.GetPosition(SelectionOverlay));
-            SelectionOverlay.Cursor = GetResizeCursor(direction);
+            var overlayPos = e.GetPosition(SelectionOverlay);
+            if (IsPointOnRotationHandle(overlayPos))
+            {
+                SelectionOverlay.Cursor = Cursors.Hand;
+            }
+            else
+            {
+                var direction = GetResizeDirection(overlayPos);
+                SelectionOverlay.Cursor = GetResizeCursor(direction);
+            }
         }
     }
 
@@ -945,13 +992,29 @@ public partial class MainWindow : Window
         _selectedLayerId = null;
         _isDraggingLayer = false;
         _isResizingLayer = false;
+        _isRotatingLayer = false;
 
-        // 선택 표시 요소 제거
-        // Remove selection indicators
+        // UI 요소 제거
+        // Remove UI elements
+        ClearSelectionUI();
+    }
+
+    /// <summary>
+    /// 선택 UI 요소만 제거 (선택 ID는 유지)
+    /// Clear selection UI elements only (keep selected ID)
+    /// </summary>
+    private void ClearSelectionUI()
+    {
         if (_selectionRect is not null)
         {
             SelectionOverlay.Children.Remove(_selectionRect);
             _selectionRect = null;
+        }
+
+        if (_rotationHandle is not null)
+        {
+            SelectionOverlay.Children.Remove(_rotationHandle);
+            _rotationHandle = null;
         }
 
         foreach (var handle in _resizeHandles)
@@ -967,15 +1030,14 @@ public partial class MainWindow : Window
     /// </summary>
     private void CreateSelectionIndicators()
     {
-        // 기존 요소 제거
-        // Remove existing indicators
-        ClearLayerSelection();
+        // 기존 UI 요소만 제거 (선택 ID는 유지)
+        // Remove existing UI elements only (keep selected ID)
+        ClearSelectionUI();
+
         if (!_selectedLayerId.HasValue)
         {
             return;
         }
-
-        _selectedLayerId = _selectedLayerId.Value;
 
         // 선택 사각형 생성
         // Create selection rectangle
@@ -1003,6 +1065,19 @@ public partial class MainWindow : Window
             _resizeHandles.Add(handle);
             SelectionOverlay.Children.Add(handle);
         }
+
+        // 회전 핸들 생성
+        // Create rotation handle
+        _rotationHandle = new System.Windows.Shapes.Ellipse
+        {
+            Width = RotationHandleSize,
+            Height = RotationHandleSize,
+            Fill = System.Windows.Media.Brushes.LimeGreen,
+            Stroke = System.Windows.Media.Brushes.White,
+            StrokeThickness = 1,
+            Cursor = Cursors.Hand
+        };
+        SelectionOverlay.Children.Add(_rotationHandle);
     }
 
     /// <summary>
@@ -1050,6 +1125,14 @@ public partial class MainWindow : Window
         {
             Canvas.SetLeft(_resizeHandles[i], positions[i].X);
             Canvas.SetTop(_resizeHandles[i], positions[i].Y);
+        }
+
+        // 회전 핸들 위치 (선택 사각형 중앙 위)
+        // Rotation handle position (above selection rectangle center)
+        if (_rotationHandle is not null)
+        {
+            Canvas.SetLeft(_rotationHandle, rect.X + rect.Width / 2 - RotationHandleSize / 2);
+            Canvas.SetTop(_rotationHandle, rect.Y - RotationHandleOffset - RotationHandleSize / 2);
         }
     }
 
@@ -1179,6 +1262,38 @@ public partial class MainWindow : Window
         }
 
         return new Rect(x, y, width, height);
+    }
+
+    /// <summary>
+    /// 회전 핸들 위에 포인트가 있는지 확인
+    /// Check if point is on rotation handle
+    /// </summary>
+    private bool IsPointOnRotationHandle(Point point)
+    {
+        if (_rotationHandle is null)
+        {
+            return false;
+        }
+
+        var handleLeft = Canvas.GetLeft(_rotationHandle);
+        var handleTop = Canvas.GetTop(_rotationHandle);
+
+        if (double.IsNaN(handleLeft) || double.IsNaN(handleTop))
+        {
+            return false;
+        }
+
+        var handleRect = new Rect(handleLeft, handleTop, RotationHandleSize, RotationHandleSize);
+        return handleRect.Contains(point);
+    }
+
+    /// <summary>
+    /// 중심점으로부터 각도 계산
+    /// Calculate angle from center point
+    /// </summary>
+    private static double GetAngleFromCenter(Point center, Point point)
+    {
+        return Math.Atan2(point.Y - center.Y, point.X - center.X) * 180 / Math.PI;
     }
 
     #endregion

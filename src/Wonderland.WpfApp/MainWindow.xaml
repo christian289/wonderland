@@ -37,7 +37,7 @@
 
             <!-- 파티클 캔버스 -->
             <!-- Particle canvas -->
-            <controls:ParticleCanvas x:Name="ParticleCanvas" />
+            <controls:ParticleCanvas x:Name="ParticleCanvas" IsHitTestVisible="False" />
 
             <!-- 선택 오버레이 캔버스 (Edit 모드에서 이미지 조작용) -->
             <!-- Selection overlay canvas (for image manipulation in Edit mode) -->

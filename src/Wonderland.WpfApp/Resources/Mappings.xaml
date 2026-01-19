@@ -1,0 +1,19 @@
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- DataTemplate View-ViewModel 매핑 -->
+    <!-- DataTemplate View-ViewModel mappings -->
+
+    <!-- 현재 프로젝트는 단일 MainWindow 구조로 DataTemplate 매핑 불필요 -->
+    <!-- This project uses a single MainWindow structure, DataTemplate mapping not needed -->
+    <!-- 향후 페이지 전환이 필요한 경우 아래 형식으로 추가: -->
+    <!-- For future page navigation, add in this format: -->
+
+    <!--
+    <DataTemplate DataType="{x:Type viewmodels:SomeViewModel}">
+        <views:SomeView />
+    </DataTemplate>
+    -->
+
+</ResourceDictionary>

@@ -25,7 +25,8 @@ public sealed class ParallaxCanvas : FrameworkElement
         double Y,
         double Width,
         double Height,
-        int ZIndex);
+        int ZIndex,
+        double Rotation = 0);
 
     public ParallaxCanvas()
     {
@@ -71,7 +72,8 @@ public sealed class ParallaxCanvas : FrameworkElement
                 layer.Transform.Y,
                 scaledWidth,
                 scaledHeight,
-                layer.ZIndex);
+                layer.ZIndex,
+                layer.Transform.Rotation);
 
             InsertVisualByZIndex(visual, layer.ZIndex);
             RenderLayer(layer.Id, 0, 0);
@@ -262,7 +264,22 @@ public sealed class ParallaxCanvas : FrameworkElement
             return;
 
         using var dc = visual.RenderOpen();
+
+        // 회전 변환 적용
+        // Apply rotation transform
+        if (info.Rotation != 0)
+        {
+            var centerX = info.X + info.Width / 2;
+            var centerY = info.Y + info.Height / 2;
+            dc.PushTransform(new RotateTransform(info.Rotation, centerX, centerY));
+        }
+
         dc.DrawImage(image, new Rect(info.X, info.Y, info.Width, info.Height));
+
+        if (info.Rotation != 0)
+        {
+            dc.Pop();
+        }
     }
 
     /// <summary>
@@ -384,6 +401,30 @@ public sealed class ParallaxCanvas : FrameworkElement
 
         _layerInfos[layerId] = info with { X = x, Y = y, Width = width, Height = height };
         RenderLayer(layerId, 0, 0);
+    }
+
+    /// <summary>
+    /// 레이어 회전 업데이트
+    /// Update layer rotation
+    /// </summary>
+    public void UpdateLayerRotation(Guid layerId, double rotation)
+    {
+        if (!_layerInfos.TryGetValue(layerId, out var info))
+        {
+            return;
+        }
+
+        _layerInfos[layerId] = info with { Rotation = rotation };
+        RenderLayer(layerId, 0, 0);
+    }
+
+    /// <summary>
+    /// 레이어 회전 값 가져오기
+    /// Get layer rotation
+    /// </summary>
+    public double GetLayerRotation(Guid layerId)
+    {
+        return _layerInfos.TryGetValue(layerId, out var info) ? info.Rotation : 0;
     }
 
     /// <summary>

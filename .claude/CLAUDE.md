@@ -92,3 +92,12 @@ src/
 |----|------|
 | F12 | Viewer/Edit 모드 토글 |
 | ESC | Edit 모드 종료 (Viewer로 전환) |
+
+## 아키텍처 노트
+
+### DataTemplate 매핑 미사용 이유
+- 단일 MainWindow 구조로 View 전환 없음
+- MainWindow.xaml.cs가 WPF 서비스 조정 역할 담당 (WindowModeService, MouseTrackingService, TrayIconService 등)
+- 이러한 서비스들은 WPF 의존성이 있어 ViewModel로 이동 불가 (MVVM 위반 방지)
+- DataContext 직접 주입이 현재 구조에 적합
+- `Resources/Mappings.xaml`은 향후 확장(다중 View 전환)을 위해 준비됨
