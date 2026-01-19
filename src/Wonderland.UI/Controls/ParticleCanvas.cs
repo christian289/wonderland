@@ -7,13 +7,11 @@ namespace Wonderland.UI.Controls;
 
 /// <summary>
 /// 파티클 렌더링 캔버스 (CompositionTarget.Rendering 기반)
-/// Particle rendering canvas (based on CompositionTarget.Rendering)
 /// </summary>
 public sealed class ParticleCanvas : FrameworkElement
 {
     /// <summary>
     /// 파티클 구조체
-    /// Particle struct
     /// </summary>
     private record struct Particle(
         double X,
@@ -34,7 +32,6 @@ public sealed class ParticleCanvas : FrameworkElement
     private bool _isActive = true;
 
     // 캐시된 브러시
-    // Cached brushes
     private SolidColorBrush? _particleBrush;
     private Pen? _rainPen;
 
@@ -47,7 +44,6 @@ public sealed class ParticleCanvas : FrameworkElement
 
     /// <summary>
     /// 파티클 타입
-    /// Particle type
     /// </summary>
     public ParticleType ParticleType
     {
@@ -61,7 +57,6 @@ public sealed class ParticleCanvas : FrameworkElement
 
     /// <summary>
     /// 파티클 설정
-    /// Particle settings
     /// </summary>
     public ParticleSettings Settings
     {
@@ -71,7 +66,6 @@ public sealed class ParticleCanvas : FrameworkElement
 
     /// <summary>
     /// 파티클 활성화 여부
-    /// Whether particles are active
     /// </summary>
     public bool IsActive
     {
@@ -89,7 +83,6 @@ public sealed class ParticleCanvas : FrameworkElement
 
     /// <summary>
     /// 브러시 업데이트
-    /// Update brushes
     /// </summary>
     private void UpdateBrushes()
     {
@@ -112,7 +105,6 @@ public sealed class ParticleCanvas : FrameworkElement
 
     /// <summary>
     /// 렌더링 콜백
-    /// Rendering callback
     /// </summary>
     private void OnRendering(object? sender, EventArgs e)
     {
@@ -124,7 +116,6 @@ public sealed class ParticleCanvas : FrameworkElement
         _lastUpdate = now;
 
         // deltaTime이 너무 크면 스킵 (창이 최소화되었다가 복귀 등)
-        // Skip if deltaTime is too large (e.g., window was minimized)
         if (deltaTime > 0.5)
         {
             deltaTime = 0.016; // ~60fps
@@ -137,7 +128,6 @@ public sealed class ParticleCanvas : FrameworkElement
 
     /// <summary>
     /// 파티클 생성
-    /// Spawn particles
     /// </summary>
     private void SpawnParticles(double deltaTime)
     {
@@ -170,7 +160,6 @@ public sealed class ParticleCanvas : FrameworkElement
 
     /// <summary>
     /// 파티클 업데이트
-    /// Update particles
     /// </summary>
     private void UpdateParticles(double deltaTime)
     {
@@ -180,10 +169,9 @@ public sealed class ParticleCanvas : FrameworkElement
 
             var newY = p.Y + p.SpeedY * deltaTime;
             var newX = p.X + p.SpeedX * deltaTime;
-            var newRotation = p.Rotation + deltaTime * 30; // 눈송이 회전 / Snowflake rotation
+            var newRotation = p.Rotation + deltaTime * 30; // 눈송이 회전
 
             // 화면 밖으로 나가면 제거
-            // Remove if off-screen
             if (newY > ActualHeight + 50 || newX < -100 || newX > ActualWidth + 100)
             {
                 _particles.RemoveAt(i);
@@ -201,7 +189,6 @@ public sealed class ParticleCanvas : FrameworkElement
 
     /// <summary>
     /// 렌더링
-    /// Render
     /// </summary>
     protected override void OnRender(DrawingContext dc)
     {
@@ -217,7 +204,6 @@ public sealed class ParticleCanvas : FrameworkElement
             if (_particleType == ParticleType.Rain && _rainPen is not null)
             {
                 // 빗방울: 선으로 렌더링
-                // Rain: Render as line
                 var rainLength = p.Size * 4;
                 dc.DrawLine(_rainPen,
                     new Point(p.X, p.Y),
@@ -226,7 +212,6 @@ public sealed class ParticleCanvas : FrameworkElement
             else
             {
                 // 눈송이: 원으로 렌더링
-                // Snow: Render as ellipse
                 dc.DrawEllipse(brush, null, new Point(p.X, p.Y), p.Size, p.Size);
             }
         }
@@ -234,7 +219,6 @@ public sealed class ParticleCanvas : FrameworkElement
 
     /// <summary>
     /// 모든 파티클 제거
-    /// Clear all particles
     /// </summary>
     public void Clear()
     {

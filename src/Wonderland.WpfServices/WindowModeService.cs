@@ -7,7 +7,6 @@ namespace Wonderland.WpfServices;
 
 /// <summary>
 /// 창 모드 서비스 (Viewer/Edit 전환)
-/// Window mode service (Viewer/Edit switching)
 /// </summary>
 public sealed class WindowModeService
 {
@@ -46,32 +45,27 @@ public sealed class WindowModeService
 
     /// <summary>
     /// 현재 모드
-    /// Current mode
     /// </summary>
     public AppMode CurrentMode => _currentMode;
 
     /// <summary>
     /// 모드 변경 이벤트
-    /// Mode changed event
     /// </summary>
     public event EventHandler<AppMode>? ModeChanged;
 
     /// <summary>
     /// 창 핸들로 초기화
-    /// Initialize with window handle
     /// </summary>
     public void Initialize(Window window)
     {
         _hwnd = new WindowInteropHelper(window).Handle;
 
         // 초기: Viewer 모드
-        // Initial: Viewer mode
         EnableClickThrough();
     }
 
     /// <summary>
     /// 모드 설정
-    /// Set mode
     /// </summary>
     public void SetMode(AppMode mode)
     {
@@ -93,7 +87,6 @@ public sealed class WindowModeService
 
     /// <summary>
     /// 모드 토글
-    /// Toggle mode
     /// </summary>
     public void ToggleMode()
     {
@@ -102,7 +95,6 @@ public sealed class WindowModeService
 
     /// <summary>
     /// Viewer 모드: 마우스 클릭이 창을 통과
-    /// Viewer mode: Mouse clicks pass through the window
     /// </summary>
     private void EnableClickThrough()
     {
@@ -114,7 +106,6 @@ public sealed class WindowModeService
 
     /// <summary>
     /// Edit 모드: 정상적인 마우스 입력
-    /// Edit mode: Normal mouse input
     /// </summary>
     private void DisableClickThrough()
     {

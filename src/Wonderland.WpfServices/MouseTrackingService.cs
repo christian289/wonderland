@@ -4,7 +4,6 @@ namespace Wonderland.WpfServices;
 
 /// <summary>
 /// 마우스 추적 서비스
-/// Mouse tracking service
 /// </summary>
 public sealed class MouseTrackingService
 {
@@ -17,7 +16,6 @@ public sealed class MouseTrackingService
 
     /// <summary>
     /// 스무딩 팩터 (0.0 ~ 1.0, 높을수록 즉각 반응)
-    /// Smoothing factor (0.0 ~ 1.0, higher means more immediate response)
     /// </summary>
     public MouseTrackingService(double smoothingFactor = 0.15)
     {
@@ -26,19 +24,16 @@ public sealed class MouseTrackingService
 
     /// <summary>
     /// 화면 크기로 초기화 (전역 마우스 훅은 화면 좌표를 반환하므로)
-    /// Initialize with screen size (since global mouse hook returns screen coordinates)
     /// </summary>
     public void Initialize(double windowWidth, double windowHeight)
     {
         // 가상 화면 크기 사용 (다중 모니터 지원)
-        // Use virtual screen size (multi-monitor support)
         var virtualLeft = SystemParameters.VirtualScreenLeft;
         var virtualTop = SystemParameters.VirtualScreenTop;
         var virtualWidth = SystemParameters.VirtualScreenWidth;
         var virtualHeight = SystemParameters.VirtualScreenHeight;
 
         // 가상 화면의 중앙 계산
-        // Calculate center of virtual screen
         var centerX = virtualLeft + virtualWidth / 2;
         var centerY = virtualTop + virtualHeight / 2;
 
@@ -51,22 +46,18 @@ public sealed class MouseTrackingService
 
     /// <summary>
     /// 창 크기 업데이트 (화면 크기 기반으로 다시 계산)
-    /// Update window size (recalculate based on screen size)
     /// </summary>
     public void UpdateWindowSize(double windowWidth, double windowHeight)
     {
         // 화면 크기는 변하지 않으므로 재계산 불필요
-        // Screen size doesn't change, no recalculation needed
     }
 
     /// <summary>
     /// 마우스 위치를 정규화된 좌표로 변환 (-1 ~ 1)
-    /// Convert mouse position to normalized coordinates (-1 to 1)
     /// </summary>
     public (double NormalizedX, double NormalizedY) GetNormalizedPosition(System.Windows.Point mousePosition)
     {
         // 스무딩 적용
-        // Apply smoothing
         _smoothedPosition = new System.Windows.Point(
             _smoothedPosition.X + (_smoothingFactor * (mousePosition.X - _smoothedPosition.X)),
             _smoothedPosition.Y + (_smoothingFactor * (mousePosition.Y - _smoothedPosition.Y))
@@ -75,12 +66,10 @@ public sealed class MouseTrackingService
         _lastPosition = mousePosition;
 
         // 화면 중앙 기준 오프셋 계산
-        // Calculate offset from screen center
         var deltaX = _smoothedPosition.X - _screenCenter.X;
         var deltaY = _smoothedPosition.Y - _screenCenter.Y;
 
         // 정규화 (-1 ~ 1 범위)
-        // Normalize to -1 to 1 range
         var normalizedX = _halfScreenWidth > 0
             ? Math.Clamp(deltaX / _halfScreenWidth, -1.0, 1.0)
             : 0;
@@ -93,7 +82,6 @@ public sealed class MouseTrackingService
 
     /// <summary>
     /// 스무딩된 위치 초기화 (중앙으로)
-    /// Reset smoothed position to center
     /// </summary>
     public void ResetToCenter()
     {

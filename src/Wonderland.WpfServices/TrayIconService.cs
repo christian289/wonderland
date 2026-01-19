@@ -6,7 +6,6 @@ namespace Wonderland.WpfServices;
 
 /// <summary>
 /// 시스템 트레이 아이콘 서비스
-/// System tray icon service
 /// </summary>
 public sealed class TrayIconService : IDisposable
 {
@@ -17,32 +16,27 @@ public sealed class TrayIconService : IDisposable
 
     /// <summary>
     /// 종료 요청 이벤트
-    /// Exit requested event
     /// </summary>
     public event EventHandler? ExitRequested;
 
     /// <summary>
     /// 모드 전환 요청 이벤트
-    /// Mode toggle requested event
     /// </summary>
     public event EventHandler? ModeToggleRequested;
 
     /// <summary>
     /// Edit 모드 요청 이벤트
-    /// Edit mode requested event
     /// </summary>
     public event EventHandler? EditModeRequested;
 
     /// <summary>
     /// 트레이 아이콘 초기화
-    /// Initialize tray icon
     /// </summary>
     public void Initialize()
     {
         _contextMenu = new ContextMenuStrip();
 
         // 모드 전환 메뉴
-        // Mode toggle menu
         _modeMenuItem = new ToolStripMenuItem("Switch to Edit Mode (F12)");
         _modeMenuItem.Click += (s, e) => ModeToggleRequested?.Invoke(this, EventArgs.Empty);
         _contextMenu.Items.Add(_modeMenuItem);
@@ -50,7 +44,6 @@ public sealed class TrayIconService : IDisposable
         _contextMenu.Items.Add(new ToolStripSeparator());
 
         // 종료 메뉴
-        // Exit menu
         var exitItem = new ToolStripMenuItem("Exit");
         exitItem.Click += (s, e) => ExitRequested?.Invoke(this, EventArgs.Empty);
         _contextMenu.Items.Add(exitItem);
@@ -64,13 +57,11 @@ public sealed class TrayIconService : IDisposable
         };
 
         // 더블클릭으로 Edit 모드 전환
-        // Double-click to switch to Edit mode
         _notifyIcon.DoubleClick += (s, e) => EditModeRequested?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>
     /// 현재 모드 업데이트
-    /// Update current mode
     /// </summary>
     public void UpdateMode(AppMode mode)
     {
@@ -93,21 +84,17 @@ public sealed class TrayIconService : IDisposable
 
     /// <summary>
     /// 기본 아이콘 생성
-    /// Create default icon
     /// </summary>
     private static Icon CreateDefaultIcon()
     {
         // 간단한 16x16 아이콘 생성
-        // Create a simple 16x16 icon
         using var bitmap = new Bitmap(16, 16);
         using var g = Graphics.FromImage(bitmap);
 
         // 배경: 투명
-        // Background: transparent
         g.Clear(Color.Transparent);
 
         // 원 그리기 (눈송이 느낌)
-        // Draw circles (snowflake feel)
         using var brush = new SolidBrush(Color.FromArgb(100, 180, 220));
         g.FillEllipse(brush, 2, 2, 12, 12);
 
@@ -115,7 +102,6 @@ public sealed class TrayIconService : IDisposable
         g.FillEllipse(whiteBrush, 5, 5, 6, 6);
 
         // Icon.FromHandle로 생성된 아이콘은 Clone()으로 복사하여 핸들 해제
-        // Clone the icon created from handle to allow handle cleanup
         var hIcon = bitmap.GetHicon();
         using var tempIcon = Icon.FromHandle(hIcon);
         var clonedIcon = (Icon)tempIcon.Clone();
@@ -128,7 +114,6 @@ public sealed class TrayIconService : IDisposable
 
     /// <summary>
     /// 풍선 알림 표시
-    /// Show balloon notification
     /// </summary>
     public void ShowNotification(string title, string text, ToolTipIcon icon = ToolTipIcon.Info)
     {
@@ -140,7 +125,6 @@ public sealed class TrayIconService : IDisposable
         if (_notifyIcon is not null)
         {
             // 아이콘을 숨긴 후 Dispose (트레이에 잔상 방지)
-            // Hide the icon before disposing (prevent tray ghost icon)
             _notifyIcon.Visible = false;
             _notifyIcon.Icon?.Dispose();
             _notifyIcon.Dispose();
