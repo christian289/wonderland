@@ -1,7 +1,20 @@
-<ResourceDictionary
-    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-    <!-- 향후 Wonderland.UI 프로젝트 전용 스타일 추가 시 사용 -->
+    <!--
+    Wonderland.UI 프로젝트 전용 스타일 허브 (MergedDictionaries)
+    Wonderland.UI project style hub (MergedDictionaries)
+
+    참고: ParallaxCanvas, ParticleCanvas는 lookless 컨트롤로
+    ControlTemplate이 불필요합니다. (OnRender에서 직접 그리기)
+    Note: ParallaxCanvas and ParticleCanvas are lookless controls
+    that don't require ControlTemplates. (Direct rendering in OnRender)
+
+    향후 ControlTemplate이 필요한 CustomControl 추가 시:
+    When adding CustomControls that need ControlTemplates:
+
+    <ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary Source="Controls/MyControl.xaml"/>
+    </ResourceDictionary.MergedDictionaries>
+    -->
 
 </ResourceDictionary>

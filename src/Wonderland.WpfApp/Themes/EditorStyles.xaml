@@ -1,252 +1,33 @@
-<ResourceDictionary
-    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-    <!-- 색상 리소스 -->
-    <Color x:Key="EditorBackgroundColor">#F0202020</Color>
-    <Color x:Key="EditorHeaderColor">#FF303030</Color>
-    <Color x:Key="EditorDragAreaColor">#60000000</Color>
-    <Color x:Key="EditorSeparatorColor">#40FFFFFF</Color>
-    <Color x:Key="EditorListBoxBackgroundColor">#20FFFFFF</Color>
+    <!--
+        에디터 스타일 허브 (MergedDictionaries)
+        Editor styles hub (MergedDictionaries)
+        
+        주의: 색상 리소스(EditorColors.xaml)가 먼저 로드되어야 합니다.
+        Note: Color resources (EditorColors.xaml) must be loaded first.
+    -->
 
-    <SolidColorBrush x:Key="EditorBackgroundBrush" Color="{StaticResource EditorBackgroundColor}"/>
-    <SolidColorBrush x:Key="EditorHeaderBrush" Color="{StaticResource EditorHeaderColor}"/>
-    <SolidColorBrush x:Key="EditorDragAreaBrush" Color="{StaticResource EditorDragAreaColor}"/>
-    <SolidColorBrush x:Key="EditorSeparatorBrush" Color="{StaticResource EditorSeparatorColor}"/>
-    <SolidColorBrush x:Key="EditorListBoxBackgroundBrush" Color="{StaticResource EditorListBoxBackgroundColor}"/>
+    <ResourceDictionary.MergedDictionaries>
+        <!--  색상 리소스 (다른 스타일에서 참조되므로 가장 먼저 로드)  -->
+        <!--  Color resources (loaded first as referenced by other styles)  -->
+        <ResourceDictionary Source="Editor/EditorColors.xaml" />
 
-    <!-- 텍스트 색상 -->
-    <SolidColorBrush x:Key="EditorTextBrush" Color="White"/>
-    <SolidColorBrush x:Key="EditorSubTextBrush" Color="#80FFFFFF"/>
-    <SolidColorBrush x:Key="EditorDimTextBrush" Color="#60FFFFFF"/>
-    <SolidColorBrush x:Key="EditorDragTextBrush" Color="#A0FFFFFF"/>
+        <!--  텍스트 및 패널 스타일  -->
+        <!--  Text and panel styles  -->
+        <ResourceDictionary Source="Editor/EditorTextStyles.xaml" />
 
-    <!-- 섹션 제목 색상 -->
-    <SolidColorBrush x:Key="EditorBackgroundTitleBrush" Color="#FFD700"/>
-    <SolidColorBrush x:Key="EditorLayerTitleBrush" Color="#00BFFF"/>
-    <SolidColorBrush x:Key="EditorParticleTitleBrush" Color="#FF69B4"/>
+        <!--  버튼 스타일  -->
+        <!--  Button styles  -->
+        <ResourceDictionary Source="Editor/EditorButtonStyles.xaml" />
 
-    <!-- 드래그 영역 스타일 -->
-    <Style x:Key="DragAreaStyle" TargetType="Border">
-        <Setter Property="Background" Value="{StaticResource EditorDragAreaBrush}"/>
-        <Setter Property="Height" Value="24"/>
-        <Setter Property="VerticalAlignment" Value="Top"/>
-        <Setter Property="Cursor" Value="SizeAll"/>
-    </Style>
+        <!--  ListBox 스타일  -->
+        <!--  ListBox styles  -->
+        <ResourceDictionary Source="Editor/EditorListBoxStyles.xaml" />
 
-    <!-- 드래그 영역 텍스트 스타일 -->
-    <Style x:Key="DragAreaTextStyle" TargetType="TextBlock">
-        <Setter Property="Foreground" Value="{StaticResource EditorDragTextBrush}"/>
-        <Setter Property="FontSize" Value="10"/>
-        <Setter Property="HorizontalAlignment" Value="Center"/>
-        <Setter Property="VerticalAlignment" Value="Center"/>
-    </Style>
-
-    <!-- 에디터 패널 스타일 -->
-    <Style x:Key="EditorPanelStyle" TargetType="Border">
-        <Setter Property="Background" Value="{StaticResource EditorBackgroundBrush}"/>
-    </Style>
-
-    <!-- 에디터 헤더 스타일 -->
-    <Style x:Key="EditorHeaderStyle" TargetType="Border">
-        <Setter Property="Background" Value="{StaticResource EditorHeaderBrush}"/>
-        <Setter Property="Padding" Value="10,8"/>
-    </Style>
-
-    <!-- 에디터 헤더 텍스트 스타일 -->
-    <Style x:Key="EditorHeaderTextStyle" TargetType="TextBlock">
-        <Setter Property="FontSize" Value="14"/>
-        <Setter Property="FontWeight" Value="Bold"/>
-        <Setter Property="Foreground" Value="{StaticResource EditorTextBrush}"/>
-    </Style>
-
-    <!-- 섹션 제목 기본 스타일 -->
-    <Style x:Key="EditorSectionTitleStyle" TargetType="TextBlock">
-        <Setter Property="FontWeight" Value="SemiBold"/>
-        <Setter Property="FontSize" Value="12"/>
-        <Setter Property="Margin" Value="0,0,0,5"/>
-    </Style>
-
-    <!-- 배경 섹션 제목 스타일 -->
-    <Style x:Key="EditorBackgroundTitleStyle" TargetType="TextBlock" BasedOn="{StaticResource EditorSectionTitleStyle}">
-        <Setter Property="Foreground" Value="{StaticResource EditorBackgroundTitleBrush}"/>
-    </Style>
-
-    <!-- 레이어 섹션 제목 스타일 -->
-    <Style x:Key="EditorLayerTitleStyle" TargetType="TextBlock" BasedOn="{StaticResource EditorSectionTitleStyle}">
-        <Setter Property="Foreground" Value="{StaticResource EditorLayerTitleBrush}"/>
-        <Setter Property="Margin" Value="0,10,0,5"/>
-    </Style>
-
-    <!-- 파티클 섹션 제목 스타일 -->
-    <Style x:Key="EditorParticleTitleStyle" TargetType="TextBlock" BasedOn="{StaticResource EditorSectionTitleStyle}">
-        <Setter Property="Foreground" Value="{StaticResource EditorParticleTitleBrush}"/>
-        <Setter Property="Margin" Value="0,10,0,5"/>
-    </Style>
-
-    <!-- 경로 텍스트 스타일 -->
-    <Style x:Key="EditorPathTextStyle" TargetType="TextBlock">
-        <Setter Property="Foreground" Value="{StaticResource EditorSubTextBrush}"/>
-        <Setter Property="FontSize" Value="10"/>
-        <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
-        <Setter Property="Margin" Value="0,0,0,10"/>
-    </Style>
-
-    <!-- 정보 텍스트 스타일 -->
-    <Style x:Key="EditorInfoTextStyle" TargetType="TextBlock">
-        <Setter Property="Foreground" Value="{StaticResource EditorDimTextBrush}"/>
-        <Setter Property="FontSize" Value="10"/>
-        <Setter Property="TextWrapping" Value="Wrap"/>
-        <Setter Property="Margin" Value="0,10,0,0"/>
-    </Style>
-
-    <!-- Z-Index 텍스트 스타일 -->
-    <Style x:Key="EditorZIndexTextStyle" TargetType="TextBlock">
-        <Setter Property="Foreground" Value="{StaticResource EditorSubTextBrush}"/>
-        <Setter Property="FontSize" Value="10"/>
-        <Setter Property="Margin" Value="0,5,0,10"/>
-    </Style>
-
-    <!-- 에디터 버튼 스타일 -->
-    <Style x:Key="EditorButtonStyle" TargetType="Button">
-        <Setter Property="Padding" Value="8,4"/>
-        <Setter Property="MinWidth" Value="60"/>
-        <Setter Property="Background" Value="#FF404040"/>
-        <Setter Property="Foreground" Value="White"/>
-        <Setter Property="BorderBrush" Value="#FF606060"/>
-        <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="Template">
-            <Setter.Value>
-                <ControlTemplate TargetType="Button">
-                    <Border Background="{TemplateBinding Background}"
-                            BorderBrush="{TemplateBinding BorderBrush}"
-                            BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="3"
-                            Padding="{TemplateBinding Padding}">
-                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                    </Border>
-                    <ControlTemplate.Triggers>
-                        <Trigger Property="IsMouseOver" Value="True">
-                            <Setter Property="Background" Value="#FF505050"/>
-                            <Setter Property="BorderBrush" Value="#FF808080"/>
-                        </Trigger>
-                        <Trigger Property="IsPressed" Value="True">
-                            <Setter Property="Background" Value="#FF303030"/>
-                        </Trigger>
-                    </ControlTemplate.Triggers>
-                </ControlTemplate>
-            </Setter.Value>
-        </Setter>
-    </Style>
-
-    <!-- 전체 너비 버튼 스타일 -->
-    <Style x:Key="EditorFullWidthButtonStyle" TargetType="Button" BasedOn="{StaticResource EditorButtonStyle}">
-        <Setter Property="HorizontalAlignment" Value="Stretch"/>
-        <Setter Property="Margin" Value="0,0,0,5"/>
-    </Style>
-
-    <!-- 에디터 ListBox 스타일 -->
-    <Style x:Key="EditorListBoxStyle" TargetType="ListBox">
-        <Setter Property="Background" Value="{StaticResource EditorListBoxBackgroundBrush}"/>
-        <Setter Property="BorderThickness" Value="0"/>
-        <Setter Property="Foreground" Value="{StaticResource EditorTextBrush}"/>
-        <Setter Property="MaxHeight" Value="150"/>
-        <Setter Property="Margin" Value="0,0,0,10"/>
-        <Setter Property="AllowDrop" Value="True"/>
-    </Style>
-
-    <!-- 에디터 ListBoxItem 스타일 -->
-    <Style x:Key="EditorListBoxItemStyle" TargetType="ListBoxItem">
-        <Setter Property="Padding" Value="8,4"/>
-        <Setter Property="Cursor" Value="Hand"/>
-        <Setter Property="AllowDrop" Value="True"/>
-        <Setter Property="Foreground" Value="{StaticResource EditorTextBrush}"/>
-        <Setter Property="Template">
-            <Setter.Value>
-                <ControlTemplate TargetType="ListBoxItem">
-                    <Border x:Name="Bd"
-                            Background="{TemplateBinding Background}"
-                            BorderBrush="{TemplateBinding BorderBrush}"
-                            BorderThickness="{TemplateBinding BorderThickness}"
-                            Padding="{TemplateBinding Padding}">
-                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
-                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
-                    </Border>
-                    <ControlTemplate.Triggers>
-                        <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Bd" Property="Background" Value="#30FFFFFF"/>
-                        </Trigger>
-                        <Trigger Property="IsSelected" Value="True">
-                            <Setter TargetName="Bd" Property="Background" Value="#50007ACC"/>
-                        </Trigger>
-                    </ControlTemplate.Triggers>
-                </ControlTemplate>
-            </Setter.Value>
-        </Setter>
-    </Style>
-
-    <!-- 에디터 RadioButton 스타일 -->
-    <Style x:Key="EditorRadioButtonStyle" TargetType="RadioButton">
-        <Setter Property="Foreground" Value="{StaticResource EditorTextBrush}"/>
-        <Setter Property="Margin" Value="0,0,10,0"/>
-        <Setter Property="VerticalContentAlignment" Value="Center"/>
-        <Setter Property="Template">
-            <Setter.Value>
-                <ControlTemplate TargetType="RadioButton">
-                    <StackPanel Orientation="Horizontal">
-                        <Grid Width="16" Height="16" Margin="0,0,5,0">
-                            <Ellipse x:Name="OuterCircle"
-                                     Stroke="#FF808080"
-                                     StrokeThickness="1"
-                                     Fill="Transparent"/>
-                            <Ellipse x:Name="InnerCircle"
-                                     Width="8" Height="8"
-                                     Fill="#FF00BFFF"
-                                     Visibility="Collapsed"/>
-                        </Grid>
-                        <ContentPresenter VerticalAlignment="Center"/>
-                    </StackPanel>
-                    <ControlTemplate.Triggers>
-                        <Trigger Property="IsChecked" Value="True">
-                            <Setter TargetName="InnerCircle" Property="Visibility" Value="Visible"/>
-                            <Setter TargetName="OuterCircle" Property="Stroke" Value="#FF00BFFF"/>
-                        </Trigger>
-                        <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="OuterCircle" Property="Stroke" Value="#FFA0A0A0"/>
-                        </Trigger>
-                    </ControlTemplate.Triggers>
-                </ControlTemplate>
-            </Setter.Value>
-        </Setter>
-    </Style>
-
-    <!-- 에디터 Separator 스타일 -->
-    <Style x:Key="EditorSeparatorStyle" TargetType="Separator">
-        <Setter Property="Background" Value="{StaticResource EditorSeparatorBrush}"/>
-        <Setter Property="Margin" Value="0,5"/>
-    </Style>
-
-    <!-- 에디터 ScrollViewer 스타일 -->
-    <Style x:Key="EditorScrollViewerStyle" TargetType="ScrollViewer">
-        <Setter Property="VerticalScrollBarVisibility" Value="Auto"/>
-        <Setter Property="HorizontalScrollBarVisibility" Value="Disabled"/>
-    </Style>
-
-    <!-- 에디터 콘텐츠 StackPanel 스타일 -->
-    <Style x:Key="EditorContentStyle" TargetType="StackPanel">
-        <Setter Property="Margin" Value="10"/>
-    </Style>
-
-    <!-- 버튼 그룹 StackPanel 스타일 -->
-    <Style x:Key="EditorButtonGroupStyle" TargetType="StackPanel">
-        <Setter Property="Orientation" Value="Horizontal"/>
-        <Setter Property="Margin" Value="0,0,0,5"/>
-    </Style>
-
-    <!-- 라디오 버튼 그룹 StackPanel 스타일 -->
-    <Style x:Key="EditorRadioGroupStyle" TargetType="StackPanel">
-        <Setter Property="Orientation" Value="Horizontal"/>
-        <Setter Property="Margin" Value="0,0,0,5"/>
-    </Style>
+        <!--  RadioButton, Separator, ScrollViewer, StackPanel 스타일  -->
+        <!--  RadioButton, Separator, ScrollViewer, StackPanel styles  -->
+        <ResourceDictionary Source="Editor/EditorMiscStyles.xaml" />
+    </ResourceDictionary.MergedDictionaries>
 
 </ResourceDictionary>

@@ -1,0 +1,36 @@
+﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--
+        색상 리소스
+        Color resources
+    -->
+    <Color x:Key="EditorBackgroundColor">#F0202020</Color>
+    <Color x:Key="EditorHeaderColor">#FF303030</Color>
+    <Color x:Key="EditorDragAreaColor">#60000000</Color>
+    <Color x:Key="EditorSeparatorColor">#40FFFFFF</Color>
+    <Color x:Key="EditorListBoxBackgroundColor">#20FFFFFF</Color>
+
+    <SolidColorBrush x:Key="EditorBackgroundBrush" Color="{StaticResource EditorBackgroundColor}" />
+    <SolidColorBrush x:Key="EditorHeaderBrush" Color="{StaticResource EditorHeaderColor}" />
+    <SolidColorBrush x:Key="EditorDragAreaBrush" Color="{StaticResource EditorDragAreaColor}" />
+    <SolidColorBrush x:Key="EditorSeparatorBrush" Color="{StaticResource EditorSeparatorColor}" />
+    <SolidColorBrush x:Key="EditorListBoxBackgroundBrush" Color="{StaticResource EditorListBoxBackgroundColor}" />
+
+    <!--
+        텍스트 색상
+        Text colors
+    -->
+    <SolidColorBrush x:Key="EditorTextBrush" Color="White" />
+    <SolidColorBrush x:Key="EditorSubTextBrush" Color="#80FFFFFF" />
+    <SolidColorBrush x:Key="EditorDimTextBrush" Color="#60FFFFFF" />
+    <SolidColorBrush x:Key="EditorDragTextBrush" Color="#A0FFFFFF" />
+
+    <!--
+        섹션 제목 색상
+        Section title colors
+    -->
+    <SolidColorBrush x:Key="EditorBackgroundTitleBrush" Color="#FFD700" />
+    <SolidColorBrush x:Key="EditorLayerTitleBrush" Color="#00BFFF" />
+    <SolidColorBrush x:Key="EditorParticleTitleBrush" Color="#FF69B4" />
+
+</ResourceDictionary>

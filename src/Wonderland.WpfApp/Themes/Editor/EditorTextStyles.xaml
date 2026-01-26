@@ -1,0 +1,97 @@
+﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--
+        드래그 영역 스타일
+        Drag area styles
+    -->
+    <Style x:Key="DragAreaStyle" TargetType="Border">
+        <Setter Property="Background" Value="{DynamicResource EditorDragAreaBrush}" />
+        <Setter Property="Height" Value="24" />
+        <Setter Property="VerticalAlignment" Value="Top" />
+        <Setter Property="Cursor" Value="SizeAll" />
+    </Style>
+
+    <Style x:Key="DragAreaTextStyle" TargetType="TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource EditorDragTextBrush}" />
+        <Setter Property="FontSize" Value="10" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!--
+        에디터 패널/헤더 스타일
+        Editor panel/header styles
+    -->
+    <Style x:Key="EditorPanelStyle" TargetType="Border">
+        <Setter Property="Background" Value="{DynamicResource EditorBackgroundBrush}" />
+    </Style>
+
+    <Style x:Key="EditorHeaderStyle" TargetType="Border">
+        <Setter Property="Background" Value="{DynamicResource EditorHeaderBrush}" />
+        <Setter Property="Padding" Value="10,8" />
+    </Style>
+
+    <Style x:Key="EditorHeaderTextStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="FontWeight" Value="Bold" />
+        <Setter Property="Foreground" Value="{DynamicResource EditorTextBrush}" />
+    </Style>
+
+    <!--
+        섹션 제목 스타일
+        Section title styles
+    -->
+    <Style x:Key="EditorSectionTitleStyle" TargetType="TextBlock">
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Margin" Value="0,0,0,5" />
+    </Style>
+
+    <Style
+        x:Key="EditorBackgroundTitleStyle"
+        BasedOn="{StaticResource EditorSectionTitleStyle}"
+        TargetType="TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource EditorBackgroundTitleBrush}" />
+    </Style>
+
+    <Style
+        x:Key="EditorLayerTitleStyle"
+        BasedOn="{StaticResource EditorSectionTitleStyle}"
+        TargetType="TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource EditorLayerTitleBrush}" />
+        <Setter Property="Margin" Value="0,10,0,5" />
+    </Style>
+
+    <Style
+        x:Key="EditorParticleTitleStyle"
+        BasedOn="{StaticResource EditorSectionTitleStyle}"
+        TargetType="TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource EditorParticleTitleBrush}" />
+        <Setter Property="Margin" Value="0,10,0,5" />
+    </Style>
+
+    <!--
+        정보 텍스트 스타일
+        Info text styles
+    -->
+    <Style x:Key="EditorPathTextStyle" TargetType="TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource EditorSubTextBrush}" />
+        <Setter Property="FontSize" Value="10" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        <Setter Property="Margin" Value="0,0,0,10" />
+    </Style>
+
+    <Style x:Key="EditorInfoTextStyle" TargetType="TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource EditorDimTextBrush}" />
+        <Setter Property="FontSize" Value="10" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="Margin" Value="0,10,0,0" />
+    </Style>
+
+    <Style x:Key="EditorZIndexTextStyle" TargetType="TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource EditorSubTextBrush}" />
+        <Setter Property="FontSize" Value="10" />
+        <Setter Property="Margin" Value="0,5,0,10" />
+    </Style>
+
+</ResourceDictionary>

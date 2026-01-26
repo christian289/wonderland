@@ -31,12 +31,13 @@ src/
 | 파일 | 역할 |
 |------|------|
 | `Wonderland.UI/Controls/ParallaxCanvas.cs` | DrawingVisual 기반 레이어 렌더링 |
-| `Wonderland.UI/Controls/ParticleCanvas.cs` | CompositionTarget.Rendering 파티클 |
+| `Wonderland.UI/Controls/ParticleCanvas.cs` | CompositionTarget.Rendering 파티클 (DependencyProperty, Brush 캐싱) |
 | `Wonderland.WpfServices/WindowModeService.cs` | WS_EX_TRANSPARENT Viewer/Edit 전환 |
 | `Wonderland.WpfServices/MouseTrackingService.cs` | 마우스 위치 추적 및 정규화 |
 | `Wonderland.WpfApp/Services/Editing/UndoService.cs` | Undo 스택 관리 |
 | `Wonderland.WpfApp/Services/Editing/LayerManipulationService.cs` | 레이어 조작 로직 |
 | `Wonderland.WpfApp/Services/Editing/SelectionIndicatorService.cs` | 선택 UI 요소 관리 |
+| `Wonderland.WpfApp/Themes/EditorStyles.xaml` | 에디터 스타일 허브 (MergedDictionaries) |
 
 ## 아키텍처 노트
 
@@ -51,6 +52,25 @@ src/
 - `Services/Editing/` 폴더에 편집 관련 서비스 집중
 - 각 서비스는 단일 책임 원칙 준수
 - MainWindow는 서비스 조합 및 UI 이벤트 핸들링만 담당
+
+### ParticleCanvas 성능 최적화
+- DependencyProperty 사용 (ParticleType, Settings, IsActive)
+- Opacity별 Brush 캐싱 (0.1 단위, 11개) - 매 프레임 Clone() 제거로 GC 부하 감소
+- Freeze()된 브러시 재사용
+
+### EditorStyles 구조
+```
+Themes/
+├── EditorStyles.xaml           # 허브 (MergedDictionaries)
+└── Editor/
+    ├── EditorColors.xaml       # 색상 리소스 (가장 먼저 로드)
+    ├── EditorTextStyles.xaml   # 텍스트/패널 스타일
+    ├── EditorButtonStyles.xaml # 버튼 스타일
+    ├── EditorListBoxStyles.xaml# ListBox 스타일
+    └── EditorMiscStyles.xaml   # RadioButton, Separator 등
+```
+- 분리된 파일에서 색상 참조 시 `DynamicResource` 사용 (로드 순서 독립)
+- `BasedOn` 스타일 참조는 `StaticResource` 유지 (WPF 제약)
 
 ## 단축키
 
